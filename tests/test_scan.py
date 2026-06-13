@@ -181,5 +181,34 @@ class TestCli(unittest.TestCase):
         self.assertIsInstance(rep["findings"], list)
 
 
+class TestIntegration(unittest.TestCase):
+    """End-to-end against the vulnerable fixture.
+
+    Asserts invariants (no crash, secret redaction, coverage keys) rather than
+    specific findings, because the local-only scanners (gitleaks/semgrep/trivy)
+    may or may not be installed. Per-tool detection correctness is covered by the
+    normalizer unit tests above. Uses --only secrets,sast,iac to avoid the
+    network-bound dependency scanners.
+    """
+
+    def setUp(self):
+        os.environ["VIBESAFE_NO_EPHEMERAL"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("VIBESAFE_NO_EPHEMERAL", None)
+
+    def test_scan_fixture_degrades_cleanly(self):
+        fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable-app"
+        out = Path(tempfile.mkdtemp())
+        rc = scan.main(["--only", "secrets,sast,iac", "--out-dir", str(out), str(fixture)])
+        self.assertEqual(rc, 0)
+        report_text = (out / "report.json").read_text()
+        # The planted secret value must NEVER appear in the report.
+        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", report_text)
+        rep = json.loads(report_text)
+        self.assertIn("scanners_skipped", rep["summary"])
+        self.assertIn("scanners_run", rep["summary"])
+
+
 if __name__ == "__main__":
     unittest.main()
