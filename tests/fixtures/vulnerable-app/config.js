@@ -1,5 +1,5 @@
-// Planted vulnerability (fixture): hardcoded secret.
-// This is a well-known AWS example key, not a real credential.
-const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";
+// Planted vulnerability (fixture): hardcoded secret (fake test credential).
+// gitleaks flags this as a GitHub PAT (github-pat rule).
+const GITHUB_TOKEN = "a3f5c9e1b7d2486094a1c8e5f2b6d0a3c7e9f1b4d6082a5c";
 
-module.exports = { AWS_KEY };
+module.exports = { GITHUB_TOKEN };

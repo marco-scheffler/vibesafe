@@ -6,7 +6,7 @@ be installed to run; otherwise they are reported as **skipped** with the install
 
 | Category | Tool | Run command (simplified) | Install |
 |---|---|---|---|
-| Secrets | gitleaks | `gitleaks detect --no-banner --no-git -f json -r /dev/stdout` | `brew install gitleaks` |
+| Secrets | gitleaks | `gitleaks dir . --no-banner -f json -r <tmpfile>` | `brew install gitleaks` |
 | Deps (Node) | npm audit | `npm audit --json` | ships with Node.js |
 | Deps (Python) | pip-audit | `pip-audit -f json` | `pip install pip-audit` |
 | Deps (multi) | osv-scanner | `osv-scanner --format json -r .` | `brew install osv-scanner` |

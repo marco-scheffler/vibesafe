@@ -184,11 +184,10 @@ class TestCli(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     """End-to-end against the vulnerable fixture.
 
-    Asserts invariants (no crash, secret redaction, coverage keys) rather than
-    specific findings, because the local-only scanners (gitleaks/semgrep/trivy)
-    may or may not be installed. Per-tool detection correctness is covered by the
-    normalizer unit tests above. Uses --only secrets,sast,iac to avoid the
-    network-bound dependency scanners.
+    Runs the secrets layer (gitleaks, a native binary that runs even under
+    VIBESAFE_NO_EPHEMERAL). Asserts the redaction + no-silent-masking invariants;
+    when gitleaks is installed it must actually detect the planted secret. On
+    machines without gitleaks the scanner is skipped and the invariants still hold.
     """
 
     def setUp(self):
@@ -197,17 +196,20 @@ class TestIntegration(unittest.TestCase):
     def tearDown(self):
         os.environ.pop("VIBESAFE_NO_EPHEMERAL", None)
 
-    def test_scan_fixture_degrades_cleanly(self):
+    def test_scan_fixture_secrets_layer(self):
         fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable-app"
         out = Path(tempfile.mkdtemp())
-        rc = scan.main(["--only", "secrets,sast,iac", "--out-dir", str(out), str(fixture)])
+        rc = scan.main(["--only", "secrets", "--out-dir", str(out), str(fixture)])
         self.assertEqual(rc, 0)
         report_text = (out / "report.json").read_text()
-        # The planted secret value must NEVER appear in the report.
-        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", report_text)
+        # The planted secret value must NEVER appear in the report (redaction).
+        self.assertNotIn("a3f5c9e1b7d2486094a1c8e5f2b6d0a3c7e9f1b4d6082a5c", report_text)
         rep = json.loads(report_text)
-        self.assertIn("scanners_skipped", rep["summary"])
-        self.assertIn("scanners_run", rep["summary"])
+        # A fatal tool failure must never be masked as "ran with 0 findings".
+        self.assertEqual(rep["summary"]["scanners_errored"], [])
+        # When gitleaks is installed it must actually catch the planted secret.
+        if "gitleaks" in rep["summary"]["scanners_run"]:
+            self.assertIn("secrets", {f["category"] for f in rep["findings"]})
 
 
 if __name__ == "__main__":

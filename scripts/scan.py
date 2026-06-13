@@ -352,7 +352,7 @@ CATEGORY_OF = {
 def _plan(stack, only):
     """Yield (tool, argv, normalizer) for the applicable scanners."""
     jobs = [("gitleaks",
-             ["detect", "--no-banner", "--no-git", "-f", "json", "-r", "/dev/stdout"],
+             ["dir", ".", "--no-banner", "-f", "json", "-r", "{REPORT}"],
              normalize_gitleaks)]
     if stack["node"]:
         jobs.append(("npm", ["audit", "--json"], normalize_npm_audit))
@@ -373,24 +373,65 @@ def _plan(stack, only):
     return jobs
 
 
+def _rm(path):
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
 def _execute_job(tool, argv, normalizer, cwd, timeout):
-    """Returns (findings, (state, info)) where state ∈ {run, skipped, errored}."""
+    """Returns (findings, (state, info)) where state ∈ {run, skipped, errored}.
+
+    Supports a "{REPORT}" placeholder in argv: it is replaced with a temp file the
+    tool writes its JSON report to (some tools, e.g. gitleaks, refuse to write to
+    stdout), which is then read back as the raw output.
+
+    Crucially: an empty result with a non-zero exit code is treated as an *error*,
+    not as "ran with 0 findings" — so a tool that fatally fails is never silently
+    masked in the coverage line.
+    """
+    name = "npm-audit" if tool == "npm" else tool
     runner = resolve_runner(tool)
     if runner is None:
-        return [], ("skipped", {"tool": tool, "reason": "not installed",
+        return [], ("skipped", {"tool": name, "reason": "not installed",
                                 "install": INSTALL_HINTS.get(tool, "")})
+
+    report_file = None
+    if "{REPORT}" in argv:
+        fd, report_file = tempfile.mkstemp(prefix="vibesafe-", suffix=".json")
+        os.close(fd)
+        argv = [report_file if a == "{REPORT}" else a for a in argv]
+
     rc, out, err, status = run_tool(runner + argv, cwd=cwd, timeout=timeout)
+
     if status != "ok":
-        return [], ("errored", {"tool": tool, "reason": status})
-    name = "npm-audit" if tool == "npm" else tool
+        if report_file:
+            _rm(report_file)
+        return [], ("errored", {"tool": name, "reason": status})
+
+    if report_file is not None:
+        try:
+            raw = Path(report_file).read_text()
+        except OSError:
+            raw = ""
+        _rm(report_file)
+    else:
+        raw = out
+    raw = raw.strip()
+
+    if not raw:
+        # No output: distinguish a clean run (exit 0) from a failed tool (exit != 0)
+        # so a fatal failure is surfaced, never masked as "ran with 0 findings".
+        if rc not in (0, None):
+            tail = ((err or "").strip().splitlines() or [""])[-1]
+            return [], ("errored", {"tool": name, "reason": f"exit {rc}: {tail[:120]}"})
+        return [], ("run", name)
     try:
-        if out.strip():
-            data = json.loads(out)
-        else:
-            data = [] if tool == "gitleaks" else {}
-        return normalizer(data), ("run", name)
+        data = json.loads(raw)
     except json.JSONDecodeError:
         return [], ("errored", {"tool": name, "reason": "bad json"})
+    return normalizer(data), ("run", name)
 
 
 def main(argv=None) -> int:
