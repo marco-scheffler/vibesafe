@@ -348,25 +348,39 @@ CATEGORY_OF = {
     "osv-scanner": "deps", "semgrep": "sast", "trivy": "iac", "checkov": "iac",
 }
 
+# Vendored / build / data directories that should never be scanned as source.
+# semgrep and trivy honor these via flags; gitleaks via scripts/gitleaks.toml.
+EXCLUDE_DIRS = ["node_modules", ".git", "dist", "build", ".next", ".nuxt",
+                ".dart_tool", ".gradle", "vendor", "postgres_data",
+                "__pycache__", ".venv", "coverage"]
+GITLEAKS_CONFIG = str(Path(__file__).resolve().parent / "gitleaks.toml")
+
 
 def _plan(stack, only):
     """Yield (tool, argv, normalizer) for the applicable scanners."""
-    jobs = [("gitleaks",
-             ["dir", ".", "--no-banner", "-f", "json", "-r", "{REPORT}"],
-             normalize_gitleaks)]
+    gl = ["dir", ".", "--no-banner", "-f", "json", "-r", "{REPORT}"]
+    if Path(GITLEAKS_CONFIG).exists():
+        gl += ["--config", GITLEAKS_CONFIG]
+    jobs = [("gitleaks", gl, normalize_gitleaks)]
+
     if stack["node"]:
         jobs.append(("npm", ["audit", "--json"], normalize_npm_audit))
     if stack["python"]:
         jobs.append(("pip-audit", ["-f", "json"], normalize_pip_audit))
     jobs.append(("osv-scanner", ["--format", "json", "-r", "."], normalize_osv))
-    jobs.append(("semgrep",
-                 ["--config", "p/security-audit", "--config", "p/secrets",
-                  "--config", "p/owasp-top-ten", "--json", "--quiet", "."],
-                 normalize_semgrep))
+
+    sg = ["--config", "p/security-audit", "--config", "p/secrets",
+          "--config", "p/owasp-top-ten", "--json", "--quiet"]
+    for d in EXCLUDE_DIRS:
+        sg += ["--exclude", d]
+    sg.append(".")
+    jobs.append(("semgrep", sg, normalize_semgrep))
+
     if stack["docker"] or stack["terraform"]:
+        skip = ",".join(f"**/{d}" for d in EXCLUDE_DIRS)
         jobs.append(("trivy",
                      ["fs", "--format", "json", "--scanners",
-                      "vuln,misconfig,secret,license", "."],
+                      "vuln,misconfig,secret,license", "--skip-dirs", skip, "."],
                      normalize_trivy))
     if only:
         jobs = [j for j in jobs if CATEGORY_OF.get(j[0]) in only]

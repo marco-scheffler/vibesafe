@@ -1,0 +1,25 @@
+# vibesafe gitleaks config: keep all default rules, but skip vendored / build /
+# data directories and binary blobs (gitleaks `dir` mode does not honor .gitignore).
+title = "vibesafe"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Exclude vendored, build, and data directories from secret scanning"
+paths = [
+  '''node_modules/''',
+  '''\.git/''',
+  '''dist/''',
+  '''build/''',
+  '''\.next/''',
+  '''\.nuxt/''',
+  '''\.dart_tool/''',
+  '''\.gradle/''',
+  '''vendor/''',
+  '''postgres_data/''',
+  '''__pycache__/''',
+  '''\.venv/''',
+  '''coverage/''',
+  '''\.(pg|sql|dump|bin|dill|class|jar|war|lock)$''',
+]
