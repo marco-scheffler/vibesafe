@@ -1,0 +1,1 @@
+[{"Description":"AWS Access Key","File":"src/config.js","StartLine":12,"RuleID":"aws-access-token","Secret":"AKIAIOSFODNN7EXAMPLE","Match":"AKIA...EXAMPLE"}]

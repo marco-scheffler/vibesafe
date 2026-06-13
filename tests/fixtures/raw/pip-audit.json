@@ -1,0 +1,1 @@
+{"dependencies":[{"name":"jinja2","version":"2.10","vulns":[{"id":"PYSEC-2021-66","fix_versions":["2.11.3"],"aliases":["CVE-2020-28493"],"description":"ReDoS in jinja2"}]}]}
