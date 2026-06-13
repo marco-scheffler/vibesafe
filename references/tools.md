@@ -32,6 +32,19 @@ Upstream vulnerability data (all free/public): OSV.dev, GitHub Advisory Database
 distro security trackers (Debian/Alpine/RHEL), and the semgrep registry. No paid feed, no AI
 service. The report's coverage line shows exactly which scanners ran.
 
+## Scanning behavior to be aware of
+
+- **semgrep** skips files matched by `.gitignore` and its built-in `.semgrepignore` defaults
+  (`node_modules/`, `vendor/`, `tests/`, build output, etc.). It scans tracked **and** untracked
+  source files, so uncommitted "vibe code" is covered — only ignored paths are excluded. Point it
+  at a **project root**, not a `tests/` subtree (semgrep ignores `tests/` by default).
+- **No single SAST pack catches everything.** semgrep's public packs reliably flag classic sinks
+  (e.g. `eval`, insecure Dockerfiles) but miss some framework-specific patterns (e.g. raw `sqlite3`
+  string-built SQL). That is why vibesafe layers secrets + deps + IaC scanners on top of SAST —
+  defense in depth, not a single tool.
+- **gitleaks** (secrets) runs independently of these ignores and covers `tests/` too, so secrets
+  in test files are still caught.
+
 ## Hermetic mode for tests
 
 Set `VIBESAFE_NO_EPHEMERAL=1` to disable `uvx`/`pipx`/`npx` fallbacks (only installed
