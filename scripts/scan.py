@@ -59,6 +59,7 @@ class Finding:
     cve: str | None = None
     rule_id: str | None = None
     remediation: str | None = None
+    committed: bool | None = None   # secrets: True if the file is git-tracked (in history)
 
 
 def finding_to_dict(f: "Finding") -> dict:
@@ -85,6 +86,44 @@ def detect_stack(path) -> dict:
         "terraform": has("*.tf"),
         "git": (path / ".git").exists(),
     }
+
+
+def tracked_abs_paths(target):
+    """Absolute paths of all git-tracked files for the repo containing `target`.
+
+    Returns a set of absolute path strings, or None if `target` is not inside a
+    git work tree (so callers can distinguish "not tracked" from "unknown")."""
+    target = Path(target)
+    try:
+        top = subprocess.run(["git", "-C", str(target), "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, timeout=10)
+        if top.returncode != 0 or not top.stdout.strip():
+            return None
+        root = Path(top.stdout.strip())
+        r = subprocess.run(["git", "-C", str(target), "ls-files", "--full-name"],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            return None
+        return {str((root / line.strip()).resolve())
+                for line in r.stdout.splitlines() if line.strip()}
+    except Exception:
+        return None
+
+
+def annotate_committed(findings, target, tracked):
+    """Set finding.committed for secrets findings based on git-tracked status.
+
+    `tracked` is the set from tracked_abs_paths (None → not a git repo → leave unknown)."""
+    if tracked is None:
+        return
+    target = Path(target)
+    for f in findings:
+        if f.category == "secrets" and f.file:
+            try:
+                ap = str((target / f.file).resolve())
+            except Exception:
+                continue
+            f.committed = ap in tracked
 
 
 # --------------------------------------------------------------------------- #
@@ -293,12 +332,16 @@ def normalize_checkov(raw) -> list:
 def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
     findings = sorted(findings, key=lambda f: severity_sort_key(f.severity))
     counts = {s: 0 for s in SEVERITIES}
+    committed_secrets = 0
     for f in findings:
         counts[normalize_severity(f.severity)] += 1
+        if f.category == "secrets" and getattr(f, "committed", None):
+            committed_secrets += 1
     return {
         "summary": {
             **counts,
             "total": len(findings),
+            "committed_secrets": committed_secrets,
             "scanners_run": run,
             "scanners_skipped": skipped,
             "scanners_errored": errored,
@@ -317,6 +360,10 @@ def render_markdown(rep: dict) -> str:
     for sev in SEVERITIES:
         L.append(f"| {sev} | {s.get(sev, 0)} |")
     L.append("")
+    if s.get("committed_secrets"):
+        L.append(f"> ⚠️ **{s['committed_secrets']} secret(s) in git-tracked files "
+                 f"(committed — in history; rotate + purge).**")
+        L.append("")
     if rep["findings"]:
         L.append("| Sev | Category | Finding | Location |")
         L.append("|---|---|---|---|")
@@ -325,6 +372,8 @@ def render_markdown(rep: dict) -> str:
             if f.get("line"):
                 loc += f":{f['line']}"
             title = str(f["title"]).replace("|", "/")
+            if f.get("committed"):
+                title = "🔓 committed — " + title
             L.append(f"| {f['severity']} | {f['category']} | {title} | {loc} |")
         L.append("")
     run = ", ".join(s["scanners_run"]) or "none"
@@ -477,6 +526,7 @@ def main(argv=None) -> int:
         else:
             errored.append(info)
 
+    annotate_committed(findings, target, tracked_abs_paths(target))
     rep = build_report(findings, target, run, skipped, errored, time.time() - t0)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
     md = render_markdown(rep)

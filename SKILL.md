@@ -52,4 +52,8 @@ When the user asks to scan/audit a project (or before a commit/release):
   skipped/errored and never aborts the run. Always show the coverage line so gaps are visible.
 - Report findings to the user **in their language**.
 - Findings never contain raw secret values (they are redacted by design).
+- **Secrets carry a `committed` flag.** `committed: true` means the secret lives in a
+  **git-tracked** file (so it is in history — treat as compromised: rotate **and** purge from
+  history). `committed: false` means local-only (gitignored) — real, but not leaked. The
+  report's summary also has `committed_secrets`; lead with those.
 - Scanner list, run commands, and what data goes online: `references/tools.md`.

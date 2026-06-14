@@ -163,6 +163,57 @@ class TestReport(unittest.TestCase):
         self.assertIn("a.py:3", md)
         self.assertIn("Coverage", md)
 
+    def test_markdown_marks_committed_secret(self):
+        f = scan.Finding(tool="gitleaks", category="secrets", severity="critical",
+                         title="leak", file="env/x.env", line=1)
+        f.committed = True
+        rep = scan.build_report([f], target="/x", run=["gitleaks"],
+                                skipped=[], errored=[], duration_s=0.1)
+        self.assertEqual(rep["summary"]["committed_secrets"], 1)
+        self.assertIn("committed", scan.render_markdown(rep).lower())
+
+
+class TestGitTracking(unittest.TestCase):
+    def _repo(self):
+        import subprocess as sp
+        d = Path(tempfile.mkdtemp())
+        sp.run(["git", "-C", str(d), "init", "-q"], check=True)
+        sp.run(["git", "-C", str(d), "config", "user.email", "t@t"], check=True)
+        sp.run(["git", "-C", str(d), "config", "user.name", "t"], check=True)
+        return d
+
+    def test_tracked_vs_untracked(self):
+        import subprocess as sp
+        d = self._repo()
+        (d / "tracked.txt").write_text("x")
+        sp.run(["git", "-C", str(d), "add", "tracked.txt"], check=True)
+        sp.run(["git", "-C", str(d), "commit", "-qm", "x"], check=True)
+        (d / "untracked.txt").write_text("y")
+        tr = scan.tracked_abs_paths(d)
+        self.assertIsNotNone(tr)
+        self.assertIn(str((d / "tracked.txt").resolve()), tr)
+        self.assertNotIn(str((d / "untracked.txt").resolve()), tr)
+
+    def test_non_repo_returns_none(self):
+        self.assertIsNone(scan.tracked_abs_paths(Path(tempfile.mkdtemp())))
+
+    def test_annotate_sets_committed(self):
+        import subprocess as sp
+        d = self._repo()
+        (d / "c.env").write_text("KEY=abc")
+        sp.run(["git", "-C", str(d), "add", "c.env"], check=True)
+        sp.run(["git", "-C", str(d), "commit", "-qm", "x"], check=True)
+        (d / "local.env").write_text("KEY=def")
+        findings = [
+            scan.Finding(tool="gitleaks", category="secrets", severity="critical",
+                         title="a", file="c.env", line=1),
+            scan.Finding(tool="gitleaks", category="secrets", severity="critical",
+                         title="b", file="local.env", line=1),
+        ]
+        scan.annotate_committed(findings, d, scan.tracked_abs_paths(d))
+        self.assertIs(findings[0].committed, True)
+        self.assertIs(findings[1].committed, False)
+
 
 class TestCli(unittest.TestCase):
     def setUp(self):
@@ -207,9 +258,13 @@ class TestIntegration(unittest.TestCase):
         rep = json.loads(report_text)
         # A fatal tool failure must never be masked as "ran with 0 findings".
         self.assertEqual(rep["summary"]["scanners_errored"], [])
-        # When gitleaks is installed it must actually catch the planted secret.
+        # When gitleaks is installed it must actually catch the planted secret,
+        # and flag it as committed (the fixture is tracked in this repo).
         if "gitleaks" in rep["summary"]["scanners_run"]:
-            self.assertIn("secrets", {f["category"] for f in rep["findings"]})
+            secs = [f for f in rep["findings"] if f["category"] == "secrets"]
+            self.assertTrue(secs)
+            self.assertTrue(all(f.get("committed") is True for f in secs))
+            self.assertGreaterEqual(rep["summary"]["committed_secrets"], 1)
 
 
 if __name__ == "__main__":
