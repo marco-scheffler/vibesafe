@@ -24,13 +24,20 @@ gracefully — they are reported as skipped with an install hint, never aborting
 
 ## Install
 
-### Claude Code
+### Claude Code — as a plugin (recommended)
+
+```text
+/plugin marketplace add WEBER-marcoscheffler/vibesafe
+/plugin install vibesafe@vibesafe-marketplace
+```
+
+### Claude Code — as a cloned skill
 
 ```bash
 git clone https://github.com/WEBER-marcoscheffler/vibesafe.git ~/.claude/skills/vibesafe
 ```
 
-Restart Claude Code, then just ask: *“scan &lt;project&gt; for security issues.”*
+Either way, restart Claude Code, then just ask: *“scan &lt;project&gt; for security issues.”*
 
 ### Other agents
 

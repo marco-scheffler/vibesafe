@@ -25,9 +25,10 @@ When writing or modifying web-app code, apply secure defaults and consult
 
 When the user asks to scan/audit a project (or before a commit/release):
 
-1. **Run the orchestrator:**
+1. **Run the orchestrator** (bundled with this skill; the path resolves whether it is
+   installed as a plugin or cloned into a skills directory):
    ```bash
-   python3 ~/.claude/skills/vibesafe/scripts/scan.py <path>
+   python3 "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/skills/vibesafe}/scripts/scan.py" <path>
    ```
    Defaults to the current directory. It detects the stack, runs every available
    scanner, and writes `report.json` + `report.md` to a temp dir (path printed at the end).

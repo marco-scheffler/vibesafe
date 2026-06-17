@@ -1,0 +1,19 @@
+{
+  "name": "vibesafe-marketplace",
+  "owner": {
+    "name": "Marco Scheffler",
+    "email": "marcoscheffler3@gmail.com"
+  },
+  "description": "vibesafe — security co-pilot skill for Claude Code (and other agents).",
+  "plugins": [
+    {
+      "name": "vibesafe",
+      "source": "./",
+      "description": "Security co-pilot for web apps: secure-coding guidance + real multi-scanner audits (secrets, dependencies, SAST, IaC/container, licenses) with one normalized report.",
+      "version": "1.3.0",
+      "homepage": "https://github.com/WEBER-marcoscheffler/vibesafe",
+      "license": "MIT",
+      "keywords": ["security", "scanner"]
+    }
+  ]
+}
