@@ -27,14 +27,14 @@ gracefully — they are reported as skipped with an install hint, never aborting
 ### Claude Code — as a plugin (recommended)
 
 ```text
-/plugin marketplace add WEBER-marcoscheffler/vibesafe
+/plugin marketplace add marco-scheffler/vibesafe
 /plugin install vibesafe@vibesafe-marketplace
 ```
 
 ### Claude Code — as a cloned skill
 
 ```bash
-git clone https://github.com/WEBER-marcoscheffler/vibesafe.git ~/.claude/skills/vibesafe
+git clone https://github.com/marco-scheffler/vibesafe.git ~/.claude/skills/vibesafe
 ```
 
 Either way, restart Claude Code, then just ask: *“scan &lt;project&gt; for security issues.”*
@@ -57,7 +57,7 @@ Same idea — clone into the agent's skills directory (global), or the project-l
 Clone anywhere and symlink, so repo edits go live immediately:
 
 ```bash
-git clone https://github.com/WEBER-marcoscheffler/vibesafe.git ~/code/vibesafe
+git clone https://github.com/marco-scheffler/vibesafe.git ~/code/vibesafe
 ln -s ~/code/vibesafe ~/.claude/skills/vibesafe
 ```
 

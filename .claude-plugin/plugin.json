@@ -6,8 +6,8 @@
     "name": "Marco Scheffler",
     "email": "marcoscheffler3@gmail.com"
   },
-  "homepage": "https://github.com/WEBER-marcoscheffler/vibesafe",
-  "repository": "https://github.com/WEBER-marcoscheffler/vibesafe",
+  "homepage": "https://github.com/marco-scheffler/vibesafe",
+  "repository": "https://github.com/marco-scheffler/vibesafe",
   "license": "MIT",
   "keywords": ["security", "scanner", "secrets", "sast", "dependencies", "iac", "vulnerabilities"]
 }
