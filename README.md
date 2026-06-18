@@ -1,20 +1,45 @@
+<div align="center">
+
+<img src="assets/vibesafe-logo.svg" alt="vibesafe" width="120" />
+
 # vibesafe
 
-> A security co-pilot **skill** for AI coding agents — proactive secure-coding guidance **plus**
-> real, multi-scanner security audits with a single normalized report.
+**Real security scans — right inside your AI coding agent.**
 
-vibesafe makes your AI coding agent approach code like a bug-hunter. Two halves:
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
+![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
+![Tests](https://img.shields.io/badge/tests-25%20passing-success.svg)
 
-- **Proactive guidance** — while you write web-app code, the agent applies secure patterns
-  (server-side validation, parameterized queries, authorization/ownership checks, secure headers,
-  no hardcoded secrets).
-- **On-demand scanning** — runs *real* tools and reports prioritized findings with fixes:
-  **secrets, vulnerable dependencies, code (SAST), IaC/container misconfig, and license risks.**
+Secrets · dependencies · SAST · IaC/containers · licenses — **one normalized report. Local engines.**
 
-Unlike a pure-prose guide, vibesafe actually executes the scanners (gitleaks, semgrep, trivy,
-npm/pip/osv audit), **normalizes every tool's output into one report**, **redacts secret values**,
-and flags **committed** secrets (those in git history) as top priority. Missing tools degrade
-gracefully — they are reported as skipped with an install hint, never aborting the run.
+</div>
+
+---
+
+## Why vibesafe?
+
+A pure-prose security guide can only *advise* — it never actually checks anything. vibesafe is the
+alternative: a **skill that runs real scanners** and feeds normalized, prioritized findings back to
+your agent — then helps you fix them, only with your approval.
+
+It works two ways at once: it **guides** secure patterns while you write code, and **audits** on
+demand with gitleaks, semgrep, trivy, and the npm/pip/osv advisory databases — every result merged
+into a single severity-ranked report.
+
+## Highlights
+
+- 🔑 **Secrets, for real** — gitleaks + trivy, with **redacted** values and a `committed` flag that
+  calls out secrets already in git history
+- 📦 **Vulnerable dependencies** — `npm audit` · `pip-audit` · `osv-scanner` across ecosystems
+- 🐛 **Code (SAST)** — semgrep security rulesets (injection, XSS, `eval`, weak crypto, …)
+- 🐳 **IaC & containers** — trivy for Docker/Terraform misconfig + license risks
+- 🧩 **One report** — every scanner normalized into a single ranked `report.json` / `report.md`
+- 🪶 **Zero-dependency core** — the orchestrator is Python **stdlib only**; missing tools degrade gracefully
+- 🔒 **Local-first** — scan engines run on your machine; only dependency *names* ever hit advisory APIs
+- ⚙️ **Two installs** — a Claude Code plugin, or a plain clone into any agent's skills directory
 
 ## Requirements
 
@@ -37,8 +62,6 @@ gracefully — they are reported as skipped with an install hint, never aborting
 git clone https://github.com/marco-scheffler/vibesafe.git ~/.claude/skills/vibesafe
 ```
 
-Either way, restart Claude Code, then just ask: *“scan &lt;project&gt; for security issues.”*
-
 ### Other agents
 
 Same idea — clone into the agent's skills directory (global), or the project-local
@@ -52,14 +75,7 @@ Same idea — clone into the agent's skills directory (global), or the project-l
 | GitHub Copilot | `~/.copilot/skills/vibesafe` |
 | Antigravity (Gemini) | `~/.gemini/antigravity/skills/vibesafe` |
 
-### Developing on the skill
-
-Clone anywhere and symlink, so repo edits go live immediately:
-
-```bash
-git clone https://github.com/marco-scheffler/vibesafe.git ~/code/vibesafe
-ln -s ~/code/vibesafe ~/.claude/skills/vibesafe
-```
+Either way, restart your agent, then just ask: *“scan &lt;project&gt; for security issues.”*
 
 ## Scanners
 
