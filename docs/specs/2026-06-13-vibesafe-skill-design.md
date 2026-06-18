@@ -198,8 +198,7 @@ Claude liest **`report.json`** und kommuniziert die Funde dem Nutzer in dessen S
 
 ## 13. Spätere Erweiterungen (post-v1)
 
-- **`--offline`-Modus:** nur lokale/gecachte DBs, keine Dependency-API-Aufrufe (für sensible/interne
-  Repos wie WEBER).
+- **`--offline`-Modus:** nur lokale/gecachte DBs, keine Dependency-API-Aufrufe (für sensible/interne Repos).
 - Fertige **CI-Action** (GitHub Actions) auf Basis desselben `scan.py`.
 - Eigene **semgrep-Regeln** für hauseigene Patterns.
 - **MCP-Server**-Variante, falls plattformübergreifend nötig.
