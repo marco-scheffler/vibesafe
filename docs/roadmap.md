@@ -35,8 +35,6 @@ Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
 
 ## Tier 2 — Produkt-Tiefe (nächste Ausbaustufe)
 
-- **SARIF-Output** (`--format sarif`) — GitHub Code-Scanning / IDE-Annotationen; Standard-Interop.
-  Kombiniert mit der GitHub Action → Findings im PR-„Security"-Tab.
 - **Trend/History** — Report-Verlauf speichern, „N neu / M behoben seit letztem Scan" (baut auf
   Fingerprint + Baseline auf).
 

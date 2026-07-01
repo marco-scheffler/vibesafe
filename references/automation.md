@@ -95,6 +95,29 @@ paths are normalized to target-relative first, so tools that emit absolute paths
 Scanners run **concurrently** by default. `--jobs N` sets how many run at once (`1` = sequential for
 debugging, `0` = all at once). Output is deterministic regardless of `--jobs`.
 
+## SARIF & code scanning
+
+Every scan also writes **`report.sarif`** (SARIF 2.1.0, one run per tool) next to
+`report.json`/`report.md`. Point GitHub code scanning at it so findings show up inline in the PR
+Security tab. The Action can upload it for you with `upload-sarif: true`:
+
+```yaml
+jobs:
+  vibesafe:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # required to upload SARIF
+    steps:
+      - uses: actions/checkout@v4
+      - run: pipx install semgrep
+      - uses: marco-scheffler/vibesafe@v1.6.0
+        with:
+          path: .
+          upload-sarif: true
+```
+
+`partialFingerprints` are omitted on purpose — `upload-sarif@v4` computes them from the source.
+
 ## GitHub Action
 
 The repo ships a composite action (`action.yml`). It runs `scan.py` and uploads the report as an
@@ -112,7 +135,7 @@ jobs:
       - uses: actions/checkout@v4
       # install the engines you care about, e.g.:
       - run: pipx install semgrep
-      - uses: marco-scheffler/vibesafe@v1.4.0
+      - uses: marco-scheffler/vibesafe@v1.6.0
         with:
           path: .
           fail-on: high
@@ -128,7 +151,7 @@ machine (`brew install gitleaks trivy osv-scanner`; semgrep via `uvx`).
 # .pre-commit-config.yaml in a consuming repo
 repos:
   - repo: https://github.com/marco-scheffler/vibesafe
-    rev: v1.4.0
+    rev: v1.6.0
     hooks:
       - id: vibesafe
 ```

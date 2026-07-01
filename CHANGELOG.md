@@ -3,6 +3,14 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
+## 1.6.0 — 2026-07-01
+
+### Added
+- **SARIF output**: every scan writes `report.sarif` (SARIF 2.1.0, one run per tool) alongside
+  `report.json`/`report.md`.
+- **Action `upload-sarif` input**: opt-in upload to GitHub code scanning via
+  `github/codeql-action/upload-sarif@v4` (needs `security-events: write`).
+
 ## 1.5.0 — 2026-07-01
 
 Engine quality.
