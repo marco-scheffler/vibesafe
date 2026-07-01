@@ -500,5 +500,43 @@ class TestNoDedupFlag(unittest.TestCase):
         self.assertEqual(rep["summary"]["deduped"], 0)
 
 
+class TestNormalizePaths(unittest.TestCase):
+    def test_absolute_under_target_becomes_relative(self):
+        target = Path(tempfile.mkdtemp())
+        f = scan.Finding(tool="osv-scanner", category="deps", severity="high", title="x",
+                         file=str(target / "sub" / "package-lock.json"))
+        scan.normalize_finding_paths([f], target)
+        self.assertEqual(f.file, "sub/package-lock.json")
+
+    def test_dotslash_stripped_and_none_ok(self):
+        f = scan.Finding(tool="t", category="sast", severity="high", title="x", file="./a.py")
+        g = scan.Finding(tool="t", category="deps", severity="high", title="y", package="p")
+        scan.normalize_finding_paths([f, g], "/whatever")
+        self.assertEqual(f.file, "a.py")
+        self.assertIsNone(g.file)
+
+
+class TestDedupCrossTool(unittest.TestCase):
+    def test_merges_title_independent_across_tools(self):
+        a = scan.Finding(tool="osv-scanner", category="deps", severity="high",
+                         title="lodash: prototype pollution", package="lodash",
+                         cve="CVE-2021-23337", file="package-lock.json")
+        b = scan.Finding(tool="trivy", category="deps", severity="critical",
+                         title="Command injection in lodash", package="lodash",
+                         cve="CVE-2021-23337", file="package-lock.json")
+        out, removed = scan.dedupe_findings([a, b])
+        self.assertEqual(removed, 1)
+        self.assertEqual(out[0].severity, "critical")        # trivy (more severe) = primary
+        self.assertEqual(out[0].also_reported_by, ["osv-scanner"])
+
+    def test_different_lines_not_merged(self):
+        a = scan.Finding(tool="semgrep", category="sast", severity="high", title="SQLi",
+                         file="app.py", line=10, rule_id="sql")
+        b = scan.Finding(tool="semgrep", category="sast", severity="high", title="SQLi",
+                         file="app.py", line=20, rule_id="sql")
+        out, removed = scan.dedupe_findings([a, b])
+        self.assertEqual((len(out), removed), (2, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

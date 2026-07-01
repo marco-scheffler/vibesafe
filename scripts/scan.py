@@ -97,18 +97,32 @@ def annotate_fingerprints(findings) -> None:
         f.fingerprint = compute_fingerprint(f)
 
 
+def dedupe_key(f):
+    """Cross-tool identity for merging: title-independent (so different tools' wording for
+    the same issue collapses) but line-aware (so distinct issues in one file stay separate).
+    Deliberately distinct from the baseline `fingerprint`."""
+    return "|".join([
+        f.category or "",
+        (f.cve or f.rule_id or "").lower(),
+        f.package or "",
+        _rel_posix(f.file),
+        str(f.line),
+    ])
+
+
 def dedupe_findings(findings):
-    """Merge findings sharing a fingerprint. Primary = most-severe (ties: first seen);
-    other source tools go into also_reported_by; committed is OR-ed across the group."""
+    """Merge findings sharing a dedupe_key across tools. Primary = most-severe (ties: first
+    seen); other source tools go into also_reported_by; committed is OR-ed across the group."""
     groups, order = {}, []
     for f in findings:
-        if f.fingerprint not in groups:
-            groups[f.fingerprint] = []
-            order.append(f.fingerprint)
-        groups[f.fingerprint].append(f)
+        k = dedupe_key(f)
+        if k not in groups:
+            groups[k] = []
+            order.append(k)
+        groups[k].append(f)
     out = []
-    for fp in order:
-        grp = groups[fp]
+    for k in order:
+        grp = groups[k]
         if len(grp) == 1:
             out.append(grp[0])
             continue
@@ -328,6 +342,25 @@ def annotate_committed(findings, target, tracked):
             except Exception:
                 continue
             f.committed = ap in tracked
+
+
+def normalize_finding_paths(findings, target):
+    """Rewrite finding.file to a target-relative posix path so fingerprints, dedup, diff and
+    baseline are portable — some scanners (e.g. osv-scanner) emit absolute paths."""
+    root = Path(target).resolve()
+    for f in findings:
+        if not f.file:
+            continue
+        p = str(f.file).replace("\\", "/")
+        fp = Path(f.file)
+        if fp.is_absolute():
+            try:
+                p = os.path.relpath(fp.resolve(), root).replace("\\", "/")
+            except Exception:
+                pass
+        if p.startswith("./"):
+            p = p[2:]
+        f.file = p
 
 
 # --------------------------------------------------------------------------- #
@@ -787,6 +820,7 @@ def main(argv=None) -> int:
             errored.append(info)
 
     # ---- post-processing pipeline (order matters; see spec §4.6) ----
+    normalize_finding_paths(findings, target)
     annotate_committed(findings, target, tracked_abs_paths(target))
     annotate_fingerprints(findings)
     deduped_n = 0
