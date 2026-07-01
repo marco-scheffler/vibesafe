@@ -85,10 +85,12 @@ scan reports the situation and yields nothing (rather than crashing).
 
 ## Dedup & parallelism
 
-Findings reported by multiple tools (e.g. one CVE from `npm audit`, `trivy` and `osv-scanner`) are
-**merged by fingerprint** into one entry — the most-severe wins and the others appear as
-`also_reported_by` (and `(also: …)` in `report.md`). The summary reports `deduped`. Disable with
-`--no-dedup`.
+Findings for the same issue reported by multiple tools (e.g. one CVE from `trivy` and
+`osv-scanner`) are **merged** into one entry — matched on category, CVE/rule, package, file and line
+(title-independent), the most-severe wins and the others appear as `also_reported_by` (and
+`(also: …)` in `report.md`). The summary reports `deduped`. Disable with `--no-dedup`. Scanner file
+paths are normalized to target-relative first, so tools that emit absolute paths (e.g.
+`osv-scanner`) dedupe, diff and baseline correctly.
 
 Scanners run **concurrently** by default. `--jobs N` sets how many run at once (`1` = sequential for
 debugging, `0` = all at once). Output is deterministic regardless of `--jobs`.

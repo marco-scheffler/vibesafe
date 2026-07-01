@@ -8,13 +8,19 @@ All notable changes to vibesafe are documented here. The format loosely follows
 Engine quality.
 
 ### Added
-- **Cross-tool dedup** (default on): findings sharing a fingerprint are merged — most-severe wins,
-  other tools listed in `also_reported_by`. Summary reports `deduped`; disable with `--no-dedup`.
+- **Cross-tool dedup** (default on): findings for the same issue reported by multiple tools
+  (matched on category / CVE-or-rule / package / file / line — title-independent) are merged;
+  most-severe wins, other tools listed in `also_reported_by`. Summary reports `deduped`; disable
+  with `--no-dedup`.
 - **Parallel scanners**: `--jobs N` runs scanners concurrently (default 4; `1`=sequential, `0`=all).
   Output stays deterministic regardless of `--jobs`.
 
 ### Changed
 - `report.json` summary gains `deduped`; merged findings gain `also_reported_by`.
+
+### Fixed
+- Scanner file paths are normalized to target-relative, so findings from tools that emit absolute
+  paths (e.g. `osv-scanner`) now work correctly with `--diff`/`--staged` and portable baselines.
 
 ## 1.4.0 — 2026-07-01
 

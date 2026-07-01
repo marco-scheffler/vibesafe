@@ -67,6 +67,18 @@ gemergten Fundes, sortiert; `None`, wenn nicht gemergt). Erscheint automatisch i
 - CLI: **`--no-dedup`** (Default: Dedup an). `build_report` selbst bleibt unverändert in der
   Zähl-Logik → bestehende Normalizer-/Report-Unit-Tests bleiben grün.
 
+### 4.4 Nachtrag (im Smoke-Test verifiziert)
+
+Der Baseline-`fingerprint` (Titel-inklusive, v1.4.0) merged tool-übergreifend faktisch **nicht**,
+weil jedes Tool andere `rule_id`/`cve`/`title`/`file` liefert. Der Dedup nutzt daher einen **eigenen
+`dedupe_key`** (getrennt vom Baseline-Fingerprint): `(category, cve|rule_id, package, file, line)` —
+**titel-unabhängig** (merged z. B. osv + trivy für dieselbe CVE) und **line-aware** (verhindert
+Über-Merging verschiedener Funde in derselben Datei). Zusätzlich normalisiert
+`normalize_finding_paths` alle Scanner-Pfade vorab **target-relativ**, da u. a. `osv-scanner`
+absolute Pfade liefert — das behebt zugleich einen latenten v1.4.0-Bug (absolute Pfade brachen
+`--diff`/`--staged` und die Baseline-Portabilität). Smoke: voller Fixture-Scan 18 → 13 Findings,
+5 echte Cross-Tool-Merges, 0 absolute Pfade.
+
 ## 5. Parallele Ausführung
 
 ### 5.1 `worker_count(n_jobs, flag) -> int` (reine Funktion)
