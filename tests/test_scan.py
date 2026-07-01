@@ -632,6 +632,20 @@ class TestBundlerAudit(unittest.TestCase):
         self.assertIn("2.0.9.1", f.remediation)
 
 
+class TestComposerAudit(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_composer_audit(raw("composer-audit.json"))
+        self.assertEqual(len(fs), 1)
+        f = fs[0]
+        self.assertEqual((f.category, f.tool), ("deps", "composer-audit"))
+        self.assertEqual(f.package, "guzzlehttp/guzzle")
+        self.assertEqual(f.severity, "high")   # composer omits severity → default high
+        self.assertEqual(f.cve, "CVE-2022-31090")
+        self.assertEqual(f.rule_id, "PKSA-1234-5678-9012")
+        self.assertEqual(f.file, "composer.lock")
+        self.assertIn("6.5.8", f.remediation)   # affectedVersions in remediation
+
+
 class TestGovulncheck(unittest.TestCase):
     def test_normalize(self):
         fs = scan.normalize_govulncheck(raw("govulncheck-sarif.json"))

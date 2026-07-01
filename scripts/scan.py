@@ -537,6 +537,24 @@ def normalize_bundler_audit(raw) -> list:
     return out
 
 
+def normalize_composer_audit(raw) -> list:
+    out = []
+    for pkg_name, advisories in (raw.get("advisories") or {}).items():
+        for adv in advisories or []:
+            name = adv.get("packageName") or pkg_name
+            affected = adv.get("affectedVersions")
+            rem = (f"Upgrade {name} beyond the affected range ({affected})."
+                   if affected else f"Upgrade {name} to a patched version.")
+            out.append(Finding(
+                tool="composer-audit", category="deps", severity="high",  # composer omits severity
+                title=adv.get("title") or f"Vulnerable dependency: {name}",
+                package=name,
+                cve=_first_cve([adv.get("cve"), adv.get("advisoryId")], adv.get("advisoryId")),
+                rule_id=adv.get("advisoryId"), file="composer.lock",
+                remediation=rem))
+    return out
+
+
 def normalize_govulncheck(raw) -> list:
     out = []
     for run in raw.get("runs") or []:
