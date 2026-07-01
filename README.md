@@ -7,11 +7,12 @@
 **Real security scans — right inside your AI coding agent.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
-![Tests](https://img.shields.io/badge/tests-25%20passing-success.svg)
+![CI](https://github.com/marco-scheffler/vibesafe/actions/workflows/ci.yml/badge.svg)
+![Tests](https://img.shields.io/badge/tests-44%20passing-success.svg)
 
 Secrets · dependencies · SAST · IaC/containers · licenses — **one normalized report. Local engines.**
 
@@ -106,6 +107,36 @@ python3 ~/.claude/skills/vibesafe/scripts/scan.py <path>
 
 It writes `report.json` + `report.md` to a temp dir and prints the path. Useful flags:
 `--only secrets,deps,sast,iac,license` · `--timeout <seconds>` · `--out-dir <dir>`.
+
+## Automate it (CI / pre-commit)
+
+vibesafe is CI- and pre-commit-friendly. Exit codes are **opt-in** — a plain run always exits `0`;
+`--fail-on <sev>` turns findings into a build gate.
+
+**GitHub Action** — the repo ships a composite action (install the engines you want; missing ones
+degrade gracefully):
+
+```yaml
+- uses: marco-scheffler/vibesafe@v1.4.0
+  with:
+    path: .
+    fail-on: high
+```
+
+**pre-commit** (`.pre-commit-config.yaml`) — scans **staged** changes, fails on `high`+:
+
+```yaml
+repos:
+  - repo: https://github.com/marco-scheffler/vibesafe
+    rev: v1.4.0
+    hooks:
+      - id: vibesafe
+```
+
+**Existing codebases** — freeze current findings with `--update-baseline`, then `--baseline
+vibesafe-baseline.json` shows only *new* issues; suppress accepted ones via `.vibesafeignore`; scope
+fast scans to changed files with `--staged` / `--diff <ref>`. Full reference:
+[`references/automation.md`](references/automation.md).
 
 ## How it works & privacy
 
