@@ -9,12 +9,12 @@
 Spec: `docs/specs/2026-07-01-vibesafe-automation-design.md`.
 
 - [x] Design/Spec
-- [ ] CI (`test` hermetisch + `live-detection` mit echtem Detection-Nachweis)
-- [ ] Exit-Codes + `--fail-on` / `--fail-on-error`
-- [ ] GitHub Action (`action.yml`) + pre-commit-Hook (`.pre-commit-hooks.yaml`)
-- [ ] Fingerprint-Baseline (`--baseline` / `--update-baseline`) + `.vibesafeignore`
-- [ ] Diff-/Staged-Scan (`--staged` / `--diff`, Post-Filter)
-- [ ] Doku (`references/automation.md`, SKILL.md, README, CHANGELOG) + Version-Bump 1.4.0
+- [x] CI (`test` hermetisch + `live-detection` mit echtem Detection-Nachweis)
+- [x] Exit-Codes + `--fail-on` / `--fail-on-error`
+- [x] GitHub Action (`action.yml`) + pre-commit-Hook (`.pre-commit-hooks.yaml`)
+- [x] Fingerprint-Baseline (`--baseline` / `--update-baseline`) + `.vibesafeignore`
+- [x] Diff-/Staged-Scan (`--staged` / `--diff`, Post-Filter)
+- [x] Doku (`references/automation.md`, SKILL.md, README, CHANGELOG) + Version-Bump 1.4.0
 
 ---
 
