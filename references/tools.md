@@ -10,6 +10,8 @@ be installed to run; otherwise they are reported as **skipped** with the install
 | Deps (Node) | npm audit | `npm audit --json` | ships with Node.js |
 | Deps (Python) | pip-audit | `pip-audit -f json` | `pip install pip-audit` |
 | Deps (multi) | osv-scanner | `osv-scanner --format json -r .` | `brew install osv-scanner` |
+| Deps (Go) | govulncheck | `govulncheck -format sarif ./...` | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
+| Deps (Rust) | cargo-audit | `cargo audit --json` | `cargo install cargo-audit` |
 | SAST (code) | semgrep | `semgrep --config p/security-audit --config p/secrets --config p/owasp-top-ten --json --quiet .` | `uvx semgrep` / `brew install semgrep` |
 | IaC / Container / License | trivy | `trivy fs --format json --scanners vuln,misconfig,secret,license .` | `brew install trivy` |
 | IaC (fallback) | checkov | `checkov -d . -o json` | `pipx run checkov` |
@@ -21,8 +23,10 @@ One-time full setup: `brew install gitleaks trivy osv-scanner` (semgrep runs via
 The **scan engines run locally**; your **source code is not uploaded**. What may touch the
 network:
 
-- **Dependency scanners** (`npm audit`, `pip-audit`, `osv-scanner`) send only **package
-  name + version** to advisory APIs (npm registry, PyPI, `api.osv.dev`) — never your code.
+- **Dependency scanners** (`npm audit`, `pip-audit`, `osv-scanner`, `cargo-audit`, `govulncheck`)
+  send only **package metadata** to advisory APIs (npm registry, PyPI, `api.osv.dev`, RustSec DB,
+  Go vulnerability DB) — never your code. (`govulncheck` also analyzes Go source locally for
+  reachability, but does not upload it.)
 - **semgrep** downloads only the **rulesets** (semgrep.dev), then scans locally.
 - **trivy** downloads a **vulnerability DB** (ghcr.io, cached locally, refreshed ~6h), then
   scans locally.

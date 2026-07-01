@@ -40,9 +40,9 @@ Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
 
 ## Tier 3 — Coverage ausbauen
 
-- **Mehr Ökosysteme** — Stack-Detection + Messaging für Go (`go.mod`), Rust (`Cargo.lock`,
-  cargo-audit), Ruby (`Gemfile.lock`, bundler-audit), PHP (`composer.lock`, composer audit),
-  Java/Maven (osv/trivy). Behebt Code-Lücke #3.
+- **Mehr Ökosysteme** — ✅ **Go + Rust in v1.7.0** (`govulncheck` via SARIF / `cargo-audit`). Offen:
+  Ruby (`Gemfile.lock`, bundler-audit), PHP (`composer.lock`, composer audit), Java/Maven
+  (osv/trivy). Code-Lücke #3 teil-behoben.
 - **Eigene semgrep-Regeln** (`rules/`) — für die in `references/tools.md` dokumentierten Lücken
   (string-gebautes SQL, Framework-spezifische Sinks). Differenzierer ggü. reinen Public-Packs.
 - **SBOM-Generierung** (CycloneDX/SPDX via trivy/syft) — Supply-Chain-Compliance.
