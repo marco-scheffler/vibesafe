@@ -645,6 +645,20 @@ class TestComposerAudit(unittest.TestCase):
         self.assertEqual(f.file, "composer.lock")
         self.assertIn("6.5.8", f.remediation)   # affectedVersions in remediation
 
+    def test_normalize_defensive(self):
+        # Empty / missing advisories → no findings, no crash.
+        self.assertEqual(scan.normalize_composer_audit({"advisories": {}}), [])
+        self.assertEqual(scan.normalize_composer_audit({}), [])
+        # Advisory missing packageName falls back to the dict key; missing
+        # affectedVersions → generic remediation; missing cve → advisoryId is the fallback.
+        fs = scan.normalize_composer_audit(
+            {"advisories": {"vendor/pkg": [{"advisoryId": "PKSA-x", "title": "t"}]}})
+        self.assertEqual(len(fs), 1)
+        self.assertEqual(fs[0].package, "vendor/pkg")
+        self.assertEqual(fs[0].cve, "PKSA-x")
+        self.assertEqual(fs[0].rule_id, "PKSA-x")
+        self.assertIn("patched version", fs[0].remediation)
+
 
 class TestGovulncheck(unittest.TestCase):
     def test_normalize(self):
