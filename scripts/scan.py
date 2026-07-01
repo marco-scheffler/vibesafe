@@ -69,6 +69,7 @@ class Finding:
     remediation: str | None = None
     committed: bool | None = None   # secrets: True if the file is git-tracked (in history)
     fingerprint: str | None = None  # stable, line-independent id (baseline/dedup basis)
+    also_reported_by: list | None = None  # other tools that flagged the same fingerprint
 
 
 def finding_to_dict(f: "Finding") -> dict:
@@ -93,6 +94,30 @@ def compute_fingerprint(f) -> str:
 def annotate_fingerprints(findings) -> None:
     for f in findings:
         f.fingerprint = compute_fingerprint(f)
+
+
+def dedupe_findings(findings):
+    """Merge findings sharing a fingerprint. Primary = most-severe (ties: first seen);
+    other source tools go into also_reported_by; committed is OR-ed across the group."""
+    groups, order = {}, []
+    for f in findings:
+        if f.fingerprint not in groups:
+            groups[f.fingerprint] = []
+            order.append(f.fingerprint)
+        groups[f.fingerprint].append(f)
+    out = []
+    for fp in order:
+        grp = groups[fp]
+        if len(grp) == 1:
+            out.append(grp[0])
+            continue
+        primary = min(grp, key=lambda g: severity_sort_key(g.severity))  # ties → first seen
+        others = sorted({g.tool for g in grp if g is not primary and g.tool != primary.tool})
+        primary.also_reported_by = others or None
+        if any(getattr(g, "committed", None) is True for g in grp):
+            primary.committed = True
+        out.append(primary)
+    return out, len(findings) - len(out)
 
 
 # --------------------------------------------------------------------------- #
@@ -497,7 +522,7 @@ def normalize_checkov(raw) -> list:
 # Report build + markdown render
 # --------------------------------------------------------------------------- #
 def build_report(findings, target, run, skipped, errored, duration_s,
-                 scope="full", changed_files=None, ignored=0, baselined=0) -> dict:
+                 scope="full", changed_files=None, ignored=0, baselined=0, deduped=0) -> dict:
     findings = sorted(findings, key=lambda f: severity_sort_key(f.severity))
     counts = {s: 0 for s in SEVERITIES}
     committed_secrets = 0
@@ -514,6 +539,7 @@ def build_report(findings, target, run, skipped, errored, duration_s,
             "changed_files": changed_files,
             "ignored": ignored,
             "baselined": baselined,
+            "deduped": deduped,
             "scanners_run": run,
             "scanners_skipped": skipped,
             "scanners_errored": errored,
@@ -558,6 +584,8 @@ def render_markdown(rep: dict) -> str:
             title = str(f["title"]).replace("|", "/")
             if f.get("committed"):
                 title = "🔓 committed — " + title
+            if f.get("also_reported_by"):
+                title += f" (also: {', '.join(f['also_reported_by'])})"
             L.append(f"| {f['severity']} | {f['category']} | {title} | {loc} |")
         L.append("")
     run = ", ".join(s["scanners_run"]) or "none"

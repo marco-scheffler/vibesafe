@@ -420,5 +420,49 @@ class TestMainWiring(unittest.TestCase):
             scan.main(["--staged", "--diff", "HEAD", str(d)])
 
 
+class TestDedup(unittest.TestCase):
+    def _dup(self, tool, sev, committed=None):
+        return scan.Finding(tool=tool, category="deps", severity=sev, title="lodash CVE",
+                            package="lodash", rule_id="CVE-2021-23337", committed=committed)
+
+    def test_merges_same_fingerprint_keeps_most_severe(self):
+        fs = [self._dup("npm-audit", "medium"), self._dup("trivy", "high"),
+              self._dup("osv-scanner", "low")]
+        scan.annotate_fingerprints(fs)
+        out, removed = scan.dedupe_findings(fs)
+        self.assertEqual(removed, 2)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].severity, "high")
+        self.assertEqual(out[0].tool, "trivy")
+        self.assertEqual(out[0].also_reported_by, ["npm-audit", "osv-scanner"])
+
+    def test_distinct_fingerprints_untouched(self):
+        fs = [scan.Finding(tool="t", category="sast", severity="high", title="a", file="a.py"),
+              scan.Finding(tool="t", category="sast", severity="high", title="b", file="b.py")]
+        scan.annotate_fingerprints(fs)
+        out, removed = scan.dedupe_findings(fs)
+        self.assertEqual((len(out), removed), (2, 0))
+        self.assertIsNone(out[0].also_reported_by)
+
+    def test_committed_flag_ors_across_group(self):
+        fs = [self._dup("gitleaks", "critical", committed=False),
+              self._dup("trivy", "critical", committed=True)]
+        scan.annotate_fingerprints(fs)
+        out, _ = scan.dedupe_findings(fs)
+        self.assertTrue(out[0].committed)
+
+    def test_markdown_shows_also_reported_by(self):
+        f = scan.Finding(tool="trivy", category="deps", severity="high", title="lodash CVE",
+                         package="lodash", also_reported_by=["npm-audit", "osv-scanner"])
+        rep = scan.build_report([f], target="/x", run=["trivy"], skipped=[], errored=[], duration_s=0.1)
+        md = scan.render_markdown(rep)
+        self.assertIn("(also: npm-audit, osv-scanner)", md)
+
+    def test_build_report_carries_deduped(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, deduped=3)
+        self.assertEqual(rep["summary"]["deduped"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()
