@@ -369,7 +369,7 @@ def normalize_finding_paths(findings, target):
 # Tool resolution / safe runner
 # --------------------------------------------------------------------------- #
 _PY_TOOLS = {"semgrep", "checkov"}          # runnable via uvx / pipx run
-_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner"}  # need a real install
+_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit"}  # need a real install
 
 INSTALL_HINTS = {
     "gitleaks": "brew install gitleaks",
@@ -379,6 +379,8 @@ INSTALL_HINTS = {
     "checkov": "pipx install checkov  # or: pipx run checkov",
     "npm": "install Node.js (npm ships with it)",
     "pip-audit": "pip install pip-audit",
+    "govulncheck": "go install golang.org/x/vuln/cmd/govulncheck@latest",
+    "cargo-audit": "cargo install cargo-audit",
 }
 
 
@@ -750,6 +752,7 @@ def build_sarif(rep) -> dict:
 CATEGORY_OF = {
     "gitleaks": "secrets", "npm": "deps", "pip-audit": "deps",
     "osv-scanner": "deps", "semgrep": "sast", "trivy": "iac", "checkov": "iac",
+    "govulncheck": "deps", "cargo-audit": "deps",
 }
 
 # Vendored / build / data directories that should never be scanned as source.
@@ -772,6 +775,10 @@ def _plan(stack, only):
     if stack["python"]:
         jobs.append(("pip-audit", ["-f", "json"], normalize_pip_audit))
     jobs.append(("osv-scanner", ["--format", "json", "-r", "."], normalize_osv))
+    if stack["go"]:
+        jobs.append(("govulncheck", ["-format", "sarif", "./..."], normalize_govulncheck))
+    if stack["rust"]:
+        jobs.append(("cargo-audit", ["audit", "--json"], normalize_cargo_audit))
 
     sg = ["--config", "p/security-audit", "--config", "p/secrets",
           "--config", "p/owasp-top-ten", "--json", "--quiet"]

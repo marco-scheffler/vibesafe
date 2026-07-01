@@ -629,5 +629,27 @@ class TestGovulncheck(unittest.TestCase):
         self.assertEqual(f.line, 12)
 
 
+class TestPlanGoRust(unittest.TestCase):
+    def _tools(self, **stack):
+        base = {"node": False, "python": False, "docker": False, "terraform": False,
+                "git": False, "go": False, "rust": False}
+        base.update(stack)
+        return [j[0] for j in scan._plan(base, only=set())]
+
+    def test_go_rust_jobs_present(self):
+        self.assertIn("govulncheck", self._tools(go=True))
+        self.assertIn("cargo-audit", self._tools(rust=True))
+        self.assertNotIn("govulncheck", self._tools())
+
+    def test_only_deps_keeps_them(self):
+        tools = self._tools(go=True, rust=True)
+        # re-filter through --only deps
+        base = {"node": False, "python": False, "docker": False, "terraform": False,
+                "git": False, "go": True, "rust": True}
+        only = [j[0] for j in scan._plan(base, only={"deps"})]
+        self.assertIn("govulncheck", only)
+        self.assertIn("cargo-audit", only)
+
+
 if __name__ == "__main__":
     unittest.main()
