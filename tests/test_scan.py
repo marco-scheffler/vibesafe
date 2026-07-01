@@ -292,5 +292,30 @@ class TestFingerprint(unittest.TestCase):
         self.assertIn("fingerprint", scan.finding_to_dict(fs[0]))
 
 
+class TestBaseline(unittest.TestCase):
+    def _fs(self):
+        fs = [scan.Finding(tool="t", category="sast", severity="high", title="x", file="a.py"),
+              scan.Finding(tool="t", category="deps", severity="low", title="y", package="lodash")]
+        scan.annotate_fingerprints(fs)
+        return fs
+
+    def test_apply_baseline_filters_known(self):
+        fs = self._fs()
+        known = {fs[0].fingerprint}
+        kept, n = scan.apply_baseline(fs, known)
+        self.assertEqual(n, 1)
+        self.assertEqual([f.title for f in kept], ["y"])
+
+    def test_missing_file_is_empty_no_error(self):
+        self.assertEqual(scan.load_baseline("/no/such/file.json"), set())
+
+    def test_write_then_load_roundtrip(self):
+        fs = self._fs()
+        p = Path(tempfile.mkdtemp()) / "vibesafe-baseline.json"
+        scan.write_baseline(p, fs, target="/x")
+        loaded = scan.load_baseline(p)
+        self.assertEqual(loaded, {f.fingerprint for f in fs})
+
+
 if __name__ == "__main__":
     unittest.main()

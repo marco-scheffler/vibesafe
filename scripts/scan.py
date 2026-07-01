@@ -89,6 +89,33 @@ def annotate_fingerprints(findings) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Baseline (freeze existing findings; re-scan shows only new ones)
+# --------------------------------------------------------------------------- #
+def load_baseline(path) -> set:
+    if not path:
+        return set()
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return set(data.get("fingerprints") or [])
+
+
+def apply_baseline(findings, baseline_fps):
+    if not baseline_fps:
+        return findings, 0
+    kept = [f for f in findings if f.fingerprint not in baseline_fps]
+    return kept, len(findings) - len(kept)
+
+
+def write_baseline(path, findings, target) -> None:
+    fps = sorted({f.fingerprint for f in findings if f.fingerprint})
+    Path(path).write_text(json.dumps(
+        {"generated_from": str(target), "count": len(fps), "fingerprints": fps},
+        indent=2))
+
+
+# --------------------------------------------------------------------------- #
 # Stack detection
 # --------------------------------------------------------------------------- #
 def detect_stack(path) -> dict:
