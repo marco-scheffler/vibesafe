@@ -344,5 +344,26 @@ class TestIgnore(unittest.TestCase):
         self.assertEqual([f.title for f in kept], ["keep"])
 
 
+class TestDiffFilter(unittest.TestCase):
+    def test_manifest_detection(self):
+        self.assertTrue(scan._is_manifest("package-lock.json"))
+        self.assertTrue(scan._is_manifest("sub/requirements-dev.txt"))
+        self.assertTrue(scan._is_manifest("go.mod"))
+        self.assertFalse(scan._is_manifest("src/app.py"))
+
+    def test_keeps_only_changed_files(self):
+        fs = [
+            scan.Finding(tool="t", category="sast", severity="high", title="a", file="app.py"),
+            scan.Finding(tool="t", category="sast", severity="high", title="b", file="./untouched.py"),
+        ]
+        kept = scan.apply_diff_filter(fs, {"app.py"})
+        self.assertEqual([f.title for f in kept], ["a"])
+
+    def test_fileless_dep_kept_only_if_manifest_changed(self):
+        dep = scan.Finding(tool="npm-audit", category="deps", severity="high", title="d", package="lodash")
+        self.assertEqual(scan.apply_diff_filter([dep], {"src/app.py"}), [])
+        self.assertEqual(len(scan.apply_diff_filter([dep], {"package-lock.json"})), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

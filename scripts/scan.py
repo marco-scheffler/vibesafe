@@ -166,6 +166,70 @@ def apply_ignore(findings, rules):
 
 
 # --------------------------------------------------------------------------- #
+# Diff / staged scoping (post-filter findings to changed files)
+# --------------------------------------------------------------------------- #
+_MANIFESTS = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock",
+              "pnpm-lock.yaml", "pyproject.toml", "Pipfile", "Pipfile.lock", "poetry.lock",
+              "go.mod", "go.sum", "Cargo.lock", "composer.lock", "Gemfile.lock"}
+
+
+def _is_manifest(relpath) -> bool:
+    base = relpath.replace("\\", "/").rsplit("/", 1)[-1]
+    if base in _MANIFESTS:
+        return True
+    return base.startswith("requirements") and base.endswith(".txt")
+
+
+def _git_lines(args, cwd):
+    try:
+        r = subprocess.run(["git", "-C", str(cwd)] + args,
+                           capture_output=True, text=True, timeout=30)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    return [l.strip() for l in r.stdout.splitlines() if l.strip()]
+
+
+def changed_files(target, staged=False, diff_ref=None):
+    """Set of posix paths (relative to `target`) that changed, or None if git fails."""
+    if staged:
+        args = ["diff", "--cached", "--name-only"]
+    elif diff_ref:
+        args = ["diff", "--name-only", diff_ref]
+    else:
+        return None
+    target = Path(target)
+    root = _git_lines(["rev-parse", "--show-toplevel"], target)
+    names = _git_lines(args, target)
+    if not root or names is None:
+        return None
+    root = Path(root[0])
+    out = set()
+    for n in names:
+        try:
+            rel = os.path.relpath((root / n).resolve(), target.resolve()).replace("\\", "/")
+        except Exception:
+            continue
+        if not rel.startswith("../"):
+            out.add(rel)
+    return out
+
+
+def apply_diff_filter(findings, changed):
+    """Keep findings in changed files; file-less findings only if a manifest changed."""
+    manifest_changed = any(_is_manifest(c) for c in changed)
+    kept = []
+    for f in findings:
+        if f.file:
+            if _rel_posix(f.file) in changed:
+                kept.append(f)
+        elif manifest_changed:
+            kept.append(f)
+    return kept
+
+
+# --------------------------------------------------------------------------- #
 # Stack detection
 # --------------------------------------------------------------------------- #
 def detect_stack(path) -> dict:
