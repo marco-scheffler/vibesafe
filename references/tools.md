@@ -45,6 +45,13 @@ service. The report's coverage line shows exactly which scanners ran.
 - **gitleaks** (secrets) runs independently of these ignores and covers `tests/` too, so secrets
   in test files are still caught.
 
+## Automation & exit codes
+
+Exit codes are **opt-in**: a plain run always exits `0`; `--fail-on <sev>` gates CI (`1` =
+findings ≥ severity, `3` = scanner error with `--fail-on-error`). Baseline (`--baseline` /
+`--update-baseline`), `.vibesafeignore`, and diff/staged scoping (`--staged` / `--diff <ref>`) are
+documented in [`automation.md`](automation.md).
+
 ## Hermetic mode for tests
 
 Set `VIBESAFE_NO_EPHEMERAL=1` to disable `uvx`/`pipx`/`npx` fallbacks (only installed
