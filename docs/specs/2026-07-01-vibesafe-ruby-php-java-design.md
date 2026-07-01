@@ -172,6 +172,34 @@ erhalten bleiben. `Gemfile.lock`/`composer.lock` sind bereits enthalten.
 - Bestehende Plan-Tests (`TestPlanGoRust` u. a.) bekommen die neuen Stack-Keys in ihren
   synthetischen `base`-Dicts, da `_plan` direkt indiziert.
 
+### 9.1 Live-Detection & CI (wie Go/Rust)
+
+Analog zu `TestLiveGoRust` wird die End-to-End-Detection mit echten Tools bewiesen
+(`@skipUnless VIBESAFE_LIVE`), damit Ruby/PHP/Java dieselbe Beweis-Tiefe wie das
+Vorgänger-Feature haben:
+
+- **Committete Fixtures** mit real verwundbaren Deps:
+  - `tests/fixtures/ruby-app/` — `Gemfile` + `Gemfile.lock` mit `rack (2.0.0)` (mehrere
+    RubySec-Advisories; bundler-audit prüft offline gegen die Advisory-DB).
+  - `tests/fixtures/php-app/` — `composer.json` mit `guzzlehttp/guzzle:6.5.0`. Die
+    `composer.lock` wird **im Test** best-effort erzeugt (`composer update --no-install`,
+    Netz nötig) — wie die npm-Lockfile-Erzeugung in `TestLiveDetection`; ohne Lock/Composer
+    → `skipTest`.
+  - `tests/fixtures/java-app/` — `pom.xml` mit `org.apache.logging.log4j:log4j-core:2.14.1`
+    (Log4Shell). osv-scanner liest `pom.xml` direkt (Netz zu osv.dev), kein Lockfile nötig.
+- **`TestLiveRubyPhpJava`** in `tests/test_live_detection.py`:
+  - Ruby: `bundler-audit` in `scanners_run` **und** ein Finding mit `package == "rack"`.
+  - PHP (nur wenn Lock erzeugt): `composer-audit` in `scanners_run` **und** ein
+    `guzzlehttp/guzzle`-Finding.
+  - Java: `osv-scanner` in `scanners_run` **und** ein Finding, dessen `package`/`title`
+    `log4j` enthält.
+  - Assertions über `scanners_run` + Package (robust gegen Cross-Tool-Dedup, wie Go/Rust).
+- **CI `live-detection`** (`.github/workflows/ci.yml`) wird erweitert:
+  - `gem install bundler-audit && bundler-audit update` (Ruby ist auf ubuntu-latest vorinstalliert).
+  - `sudo apt-get install -y php-cli` + offizieller Composer-Installer nach `$HOME/bin`
+    (garantiert Composer ≥ 2.4 mit `audit`).
+  - Java: kein Extra-Tool — osv-scanner ist im Job bereits installiert.
+
 ## 10. Docs / Version
 
 - `references/tools.md`: Scanner-Matrix += Ruby (`bundler-audit`) / PHP (`composer audit`) /
@@ -192,5 +220,9 @@ erhalten bleiben. `Gemfile.lock`/`composer.lock` sind bereits enthalten.
 - **JS-Verfeinerung** ist eine bewusste Verhaltensänderung: reine yarn/pnpm-Projekte planen
   `npm audit` nicht mehr ein (statt es erroren zu lassen); osv-Abdeckung bleibt. Für
   package-lock-Projekte unverändert.
-- **Keine lokalen Live-Fixtures** (Tools nicht installiert) → Unit-Tests über erfasste
-  Roh-Fixtures, wie die bestehenden Normalizer.
+- **Lokal keine echten Tools** → hermetische Unit-Tests laufen über erfasste Roh-Fixtures
+  (`bundler-audit.json`/`composer-audit.json`); die End-to-End-Detection wird stattdessen in
+  der CI (`VIBESAFE_LIVE=1`, echte Tools) bewiesen — siehe §9.1, analog Go/Rust.
+- **CI-Abhängigkeiten** (outward-facing): PHP/Composer-Setup + `bundler-audit update` brauchen
+  Netz; osv/composer/bundler-audit-DBs sind öffentlich/kostenlos. Bei Netzausfall im Live-Job
+  schlägt nur der (separate) `live-detection`-Job fehl, nicht die hermetische Matrix.
