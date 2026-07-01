@@ -22,10 +22,10 @@ Spec: `docs/specs/2026-07-01-vibesafe-automation-design.md`.
 
 Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
 
-1. **Keine Cross-Tool-Dedup** — jede `normalize_*` hängt unabhängig an; dieselbe CVE erscheint via
-   `npm audit` **+** `trivy` **+** `osv` mehrfach. (Fingerprint aus v1.4.0 ist die Grundlage zum Fix.)
-2. **Sequentielle Ausführung** — `for tool … in _plan()` läuft Scanner nacheinander; trivy-DB +
-   semgrep + osv summieren sich in der Wallclock.
+1. ~~**Keine Cross-Tool-Dedup**~~ — ✅ **behoben in v1.5.0**: dieselbe CVE von `npm audit` **+**
+   `trivy` **+** `osv` wird jetzt per Fingerprint gemergt (`also_reported_by`).
+2. ~~**Sequentielle Ausführung**~~ — ✅ **behoben in v1.5.0**: Scanner laufen parallel via
+   `ThreadPoolExecutor` (`--jobs`, Default 4).
 3. **Stack-Detection ist Node/Python/Docker/TF-zentriert** — osv/semgrep laufen zwar generisch,
    aber Go/Rust/Ruby/PHP/Java werden nicht erkannt oder adressiert.
 4. **Integrationstest bewies bisher keine Detection** — nur Invarianten (kein Crash, Redaction,
@@ -35,10 +35,6 @@ Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
 
 ## Tier 2 — Produkt-Tiefe (nächste Ausbaustufe)
 
-- **Cross-Tool-Dedup** — Findings über Tools hinweg per Fingerprint zusammenführen (Quellen-Tools
-  als Liste behalten). Behebt Code-Lücke #1.
-- **Parallele Scanner-Ausführung** — Thread-/Prozess-Pool über `_plan()`-Jobs; Per-Tool-Timeout
-  bleibt. Behebt Code-Lücke #2. Größter Wallclock-Gewinn für den Audit-Flow.
 - **SARIF-Output** (`--format sarif`) — GitHub Code-Scanning / IDE-Annotationen; Standard-Interop.
   Kombiniert mit der GitHub Action → Findings im PR-„Security"-Tab.
 - **Trend/History** — Report-Verlauf speichern, „N neu / M behoben seit letztem Scan" (baut auf

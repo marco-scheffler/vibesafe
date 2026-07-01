@@ -83,6 +83,16 @@ python3 scripts/scan.py . --diff origin/main  # files changed since a ref (PRs)
 reports `scope` (`full` | `staged` | `diff:<ref>`) and `changed_files`. If git is unavailable the
 scan reports the situation and yields nothing (rather than crashing).
 
+## Dedup & parallelism
+
+Findings reported by multiple tools (e.g. one CVE from `npm audit`, `trivy` and `osv-scanner`) are
+**merged by fingerprint** into one entry — the most-severe wins and the others appear as
+`also_reported_by` (and `(also: …)` in `report.md`). The summary reports `deduped`. Disable with
+`--no-dedup`.
+
+Scanners run **concurrently** by default. `--jobs N` sets how many run at once (`1` = sequential for
+debugging, `0` = all at once). Output is deterministic regardless of `--jobs`.
+
 ## GitHub Action
 
 The repo ships a composite action (`action.yml`). It runs `scan.py` and uploads the report as an

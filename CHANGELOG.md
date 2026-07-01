@@ -3,6 +3,19 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
+## 1.5.0 — 2026-07-01
+
+Engine quality.
+
+### Added
+- **Cross-tool dedup** (default on): findings sharing a fingerprint are merged — most-severe wins,
+  other tools listed in `also_reported_by`. Summary reports `deduped`; disable with `--no-dedup`.
+- **Parallel scanners**: `--jobs N` runs scanners concurrently (default 4; `1`=sequential, `0`=all).
+  Output stays deterministic regardless of `--jobs`.
+
+### Changed
+- `report.json` summary gains `deduped`; merged findings gain `also_reported_by`.
+
 ## 1.4.0 — 2026-07-01
 
 Automation & adoption: make vibesafe usable in pipelines and on existing codebases.
