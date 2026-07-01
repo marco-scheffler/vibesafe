@@ -504,6 +504,24 @@ def normalize_cargo_audit(raw) -> list:
     return out
 
 
+def normalize_govulncheck(raw) -> list:
+    out = []
+    for run in raw.get("runs") or []:
+        for res in run.get("results") or []:
+            rid = res.get("ruleId")
+            locs = res.get("locations") or []
+            pl = (locs[0].get("physicalLocation") or {}) if locs else {}
+            out.append(Finding(
+                tool="govulncheck", category="deps",
+                severity=_SARIF_TO_SEV.get(res.get("level"), "high"),
+                title=((res.get("message") or {}).get("text") or rid or "Go vulnerability")[:200],
+                file=(pl.get("artifactLocation") or {}).get("uri"),
+                line=(pl.get("region") or {}).get("startLine"),
+                rule_id=rid, cve=_first_cve([rid], rid),
+                remediation="Update the module to a fixed version."))
+    return out
+
+
 def normalize_gitleaks(raw) -> list:
     items = raw if isinstance(raw, list) else raw.get("findings", [])
     out = []
@@ -665,6 +683,7 @@ def render_markdown(rep: dict) -> str:
 
 _SARIF_LEVEL = {"critical": "error", "high": "error", "medium": "warning",
                 "low": "note", "info": "note"}
+_SARIF_TO_SEV = {"error": "high", "warning": "medium", "note": "low"}
 
 
 def build_sarif(rep) -> dict:

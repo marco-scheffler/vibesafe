@@ -1,0 +1,20 @@
+{
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {"driver": {"name": "govulncheck", "rules": [
+        {"id": "GO-2021-0113", "shortDescription": {"text": "Out-of-range read in golang.org/x/text"}}
+      ]}},
+      "results": [
+        {
+          "ruleId": "GO-2021-0113",
+          "level": "error",
+          "message": {"text": "golang.org/x/text/language: out-of-range read via ParseAcceptLanguage"},
+          "locations": [
+            {"physicalLocation": {"artifactLocation": {"uri": "main.go"}, "region": {"startLine": 12}}}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -618,5 +618,16 @@ class TestCargoAudit(unittest.TestCase):
         self.assertIn(">=0.2.23", f.remediation)
 
 
+class TestGovulncheck(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_govulncheck(raw("govulncheck-sarif.json"))
+        self.assertEqual(len(fs), 1)
+        f = fs[0]
+        self.assertEqual((f.category, f.tool, f.severity), ("deps", "govulncheck", "high"))
+        self.assertEqual(f.rule_id, "GO-2021-0113")
+        self.assertEqual(f.file, "main.go")
+        self.assertEqual(f.line, 12)
+
+
 if __name__ == "__main__":
     unittest.main()
