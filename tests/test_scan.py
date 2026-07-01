@@ -660,7 +660,8 @@ class TestGovulncheck(unittest.TestCase):
 class TestPlanGoRust(unittest.TestCase):
     def _tools(self, **stack):
         base = {"node": False, "python": False, "docker": False, "terraform": False,
-                "git": False, "go": False, "rust": False}
+                "git": False, "go": False, "rust": False,
+                "ruby": False, "php": False, "java": False, "npm_lock": False}
         base.update(stack)
         return [j[0] for j in scan._plan(base, only=set())]
 
@@ -673,7 +674,8 @@ class TestPlanGoRust(unittest.TestCase):
         tools = self._tools(go=True, rust=True)
         # re-filter through --only deps
         base = {"node": False, "python": False, "docker": False, "terraform": False,
-                "git": False, "go": True, "rust": True}
+                "git": False, "go": True, "rust": True,
+                "ruby": False, "php": False, "java": False, "npm_lock": False}
         only = [j[0] for j in scan._plan(base, only={"deps"})]
         self.assertIn("govulncheck", only)
         self.assertIn("cargo-audit", only)
@@ -701,6 +703,39 @@ class TestDetectRubyPhpJava(unittest.TestCase):
         s = scan.detect_stack(self._mk("package.json"))
         self.assertTrue(s["node"])
         self.assertFalse(s["npm_lock"])
+
+
+class TestPlanRubyPhpJava(unittest.TestCase):
+    def _base(self, **stack):
+        base = {"node": False, "python": False, "docker": False, "terraform": False,
+                "git": False, "go": False, "rust": False,
+                "ruby": False, "php": False, "java": False, "npm_lock": False}
+        base.update(stack)
+        return base
+
+    def _tools(self, **stack):
+        return [j[0] for j in scan._plan(self._base(**stack), only=set())]
+
+    def test_ruby_php_jobs_present(self):
+        self.assertIn("bundler-audit", self._tools(ruby=True))
+        self.assertIn("composer", self._tools(php=True))
+
+    def test_java_adds_no_job(self):
+        # Java is covered by the always-on osv-scanner; no dedicated job.
+        self.assertEqual(self._tools(java=True), self._tools())
+
+    def test_npm_gated_on_lockfile(self):
+        self.assertNotIn("npm", self._tools(node=True))                 # node but no lock
+        self.assertIn("npm", self._tools(node=True, npm_lock=True))     # lock present
+
+    def test_only_deps_keeps_ruby_php(self):
+        only = [j[0] for j in scan._plan(self._base(ruby=True, php=True), only={"deps"})]
+        self.assertIn("bundler-audit", only)
+        self.assertIn("composer", only)
+
+    def test_pom_is_manifest(self):
+        self.assertTrue(scan._is_manifest("pom.xml"))
+        self.assertTrue(scan._is_manifest("sub/build.gradle"))
 
 
 if __name__ == "__main__":

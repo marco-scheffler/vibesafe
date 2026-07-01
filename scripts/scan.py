@@ -227,7 +227,8 @@ def apply_ignore(findings, rules):
 # --------------------------------------------------------------------------- #
 _MANIFESTS = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock",
               "pnpm-lock.yaml", "pyproject.toml", "Pipfile", "Pipfile.lock", "poetry.lock",
-              "go.mod", "go.sum", "Cargo.lock", "composer.lock", "Gemfile.lock"}
+              "go.mod", "go.sum", "Cargo.lock", "composer.lock", "Gemfile.lock",
+              "pom.xml", "build.gradle", "build.gradle.kts", "gradle.lockfile"}
 
 
 def _is_manifest(relpath) -> bool:
@@ -375,7 +376,8 @@ def normalize_finding_paths(findings, target):
 # Tool resolution / safe runner
 # --------------------------------------------------------------------------- #
 _PY_TOOLS = {"semgrep", "checkov"}          # runnable via uvx / pipx run
-_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit"}  # need a real install
+_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit",
+                "bundler-audit", "composer"}  # need a real install
 
 INSTALL_HINTS = {
     "gitleaks": "brew install gitleaks",
@@ -387,6 +389,8 @@ INSTALL_HINTS = {
     "pip-audit": "pip install pip-audit",
     "govulncheck": "go install golang.org/x/vuln/cmd/govulncheck@latest",
     "cargo-audit": "cargo install cargo-audit",
+    "bundler-audit": "gem install bundler-audit",
+    "composer": "install Composer — https://getcomposer.org",
 }
 
 
@@ -802,6 +806,7 @@ CATEGORY_OF = {
     "gitleaks": "secrets", "npm": "deps", "pip-audit": "deps",
     "osv-scanner": "deps", "semgrep": "sast", "trivy": "iac", "checkov": "iac",
     "govulncheck": "deps", "cargo-audit": "deps",
+    "bundler-audit": "deps", "composer": "deps",
 }
 
 # Vendored / build / data directories that should never be scanned as source.
@@ -819,7 +824,7 @@ def _plan(stack, only):
         gl += ["--config", GITLEAKS_CONFIG]
     jobs = [("gitleaks", gl, normalize_gitleaks)]
 
-    if stack["node"]:
+    if stack["npm_lock"]:
         jobs.append(("npm", ["audit", "--json"], normalize_npm_audit))
     if stack["python"]:
         jobs.append(("pip-audit", ["-f", "json"], normalize_pip_audit))
@@ -828,6 +833,10 @@ def _plan(stack, only):
         jobs.append(("govulncheck", ["-format", "sarif", "./..."], normalize_govulncheck))
     if stack["rust"]:
         jobs.append(("cargo-audit", ["audit", "--json"], normalize_cargo_audit))
+    if stack["ruby"]:
+        jobs.append(("bundler-audit", ["check", "--format", "json"], normalize_bundler_audit))
+    if stack["php"]:
+        jobs.append(("composer", ["audit", "--format=json"], normalize_composer_audit))
 
     sg = ["--config", "p/security-audit", "--config", "p/secrets",
           "--config", "p/owasp-top-ten", "--json", "--quiet"]
@@ -865,7 +874,7 @@ def _execute_job(tool, argv, normalizer, cwd, timeout):
     not as "ran with 0 findings" — so a tool that fatally fails is never silently
     masked in the coverage line.
     """
-    name = "npm-audit" if tool == "npm" else tool
+    name = {"npm": "npm-audit", "composer": "composer-audit"}.get(tool, tool)
     runner = resolve_runner(tool)
     if runner is None:
         return [], ("skipped", {"tool": name, "reason": "not installed",
