@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: unit (hermetic)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run unit + integration tests (no network, no scanners)
+        env:
+          VIBESAFE_NO_EPHEMERAL: "1"
+        run: python -m unittest discover -s tests -v
+
+  live-detection:
+    name: live detection (real scanners)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install scanners
+        run: |
+          set -eux
+          mkdir -p "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          # gitleaks (secrets)
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar -xz -C "$HOME/bin" gitleaks
+          # trivy (iac / misconfig / license)
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b "$HOME/bin"
+          # osv-scanner (deps)
+          go install github.com/google/osv-scanner/cmd/osv-scanner@v1.8.5
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          # semgrep (sast)
+          pipx install semgrep
+      - name: Resolve lodash lockfile for the fixture (enables deps detection)
+        working-directory: tests/fixtures/vulnerable-app
+        run: npm install --package-lock-only
+      - name: Prove detection against the vulnerable fixture
+        env:
+          VIBESAFE_LIVE: "1"
+        run: python -m unittest tests.test_live_detection -v
