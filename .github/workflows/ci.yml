@@ -45,11 +45,8 @@ jobs:
           # osv-scanner (deps)
           go install github.com/google/osv-scanner/cmd/osv-scanner@v1.8.5
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          # semgrep (sast)
-          pipx install semgrep
-      - name: Resolve lodash lockfile for the fixture (enables deps detection)
-        working-directory: tests/fixtures/vulnerable-app
-        run: npm install --package-lock-only
+          # semgrep (sast) — pip so it lands on the setup-python PATH
+          pip install semgrep
       - name: Prove detection against the vulnerable fixture
         env:
           VIBESAFE_LIVE: "1"
