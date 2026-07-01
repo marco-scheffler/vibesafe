@@ -1,0 +1,38 @@
+name: vibesafe security scan
+description: Run vibesafe's multi-scanner audit and optionally gate on severity.
+branding:
+  icon: shield
+  color: purple
+inputs:
+  path:
+    description: Path to scan.
+    default: "."
+  fail-on:
+    description: >-
+      Fail (non-zero) if a finding at or above this severity is shown
+      (critical|high|medium|low|info). Empty = never fail.
+    default: ""
+  only:
+    description: Comma list of categories (secrets,deps,sast,iac,license).
+    default: ""
+  timeout:
+    description: Per-tool timeout in seconds.
+    default: "120"
+runs:
+  using: composite
+  steps:
+    - name: Run vibesafe scan
+      shell: bash
+      run: |
+        set -eo pipefail
+        args=("${{ inputs.path }}" --out-dir "$RUNNER_TEMP/vibesafe" --timeout "${{ inputs.timeout }}")
+        [ -n "${{ inputs.fail-on }}" ] && args+=(--fail-on "${{ inputs.fail-on }}")
+        [ -n "${{ inputs.only }}" ] && args+=(--only "${{ inputs.only }}")
+        python3 "$GITHUB_ACTION_PATH/scripts/scan.py" "${args[@]}"
+    - name: Upload report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: vibesafe-report
+        path: ${{ runner.temp }}/vibesafe/report.*
+        if-no-files-found: ignore

@@ -9,6 +9,8 @@ gracefully — they are recorded as skipped/errored and never abort the run.
 from __future__ import annotations
 
 import argparse
+import fnmatch
+import hashlib
 import json
 import os
 import shutil
@@ -24,6 +26,12 @@ from pathlib import Path
 # --------------------------------------------------------------------------- #
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 _SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
+
+# Exit codes. A default run (no --fail-on / --fail-on-error) is always EXIT_OK,
+# so existing callers are unaffected. argparse keeps 2 for usage errors.
+EXIT_OK = 0
+EXIT_FINDINGS = 1
+EXIT_TOOL_ERROR = 3
 _SEV_ALIASES = {
     "moderate": "medium",
     "error": "high",
@@ -60,12 +68,171 @@ class Finding:
     rule_id: str | None = None
     remediation: str | None = None
     committed: bool | None = None   # secrets: True if the file is git-tracked (in history)
+    fingerprint: str | None = None  # stable, line-independent id (baseline/dedup basis)
 
 
 def finding_to_dict(f: "Finding") -> dict:
     d = asdict(f)
     d["severity"] = normalize_severity(d["severity"])
     return d
+
+
+def compute_fingerprint(f) -> str:
+    """Stable, line-independent id for a finding (baseline/dedup basis)."""
+    norm_title = (f.title or "").strip().lower()[:200]
+    basis = "|".join([
+        f.category or "",
+        f.rule_id or f.cve or "",
+        f.package or "",
+        f.file or "",
+        norm_title,
+    ])
+    return hashlib.sha1(basis.encode("utf-8")).hexdigest()[:16]
+
+
+def annotate_fingerprints(findings) -> None:
+    for f in findings:
+        f.fingerprint = compute_fingerprint(f)
+
+
+# --------------------------------------------------------------------------- #
+# Baseline (freeze existing findings; re-scan shows only new ones)
+# --------------------------------------------------------------------------- #
+def load_baseline(path) -> set:
+    if not path:
+        return set()
+    try:
+        data = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError):
+        return set()
+    return set(data.get("fingerprints") or [])
+
+
+def apply_baseline(findings, baseline_fps):
+    if not baseline_fps:
+        return findings, 0
+    kept = [f for f in findings if f.fingerprint not in baseline_fps]
+    return kept, len(findings) - len(kept)
+
+
+def write_baseline(path, findings, target) -> None:
+    fps = sorted({f.fingerprint for f in findings if f.fingerprint})
+    Path(path).write_text(json.dumps(
+        {"generated_from": str(target), "count": len(fps), "fingerprints": fps},
+        indent=2))
+
+
+# --------------------------------------------------------------------------- #
+# .vibesafeignore (pattern-based suppression of accepted findings)
+# --------------------------------------------------------------------------- #
+def load_ignore_rules(path):
+    """Parse .vibesafeignore → list of (kind, pattern), kind ∈ path|rule|cve."""
+    rules = []
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return rules
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("path:"):
+            rules.append(("path", line[5:].strip()))
+        elif line.startswith("rule:"):
+            rules.append(("rule", line[5:].strip()))
+        elif line.startswith("cve:"):
+            rules.append(("cve", line[4:].strip().lower()))
+        else:
+            rules.append(("path", line))
+    return rules
+
+
+def _rel_posix(file):
+    fp = (file or "").replace("\\", "/")
+    return fp[2:] if fp.startswith("./") else fp
+
+
+def _matches_ignore(f, kind, pattern):
+    if kind == "path":
+        fp = _rel_posix(f.file)
+        return bool(fp) and fnmatch.fnmatch(fp, pattern)
+    if kind == "rule":
+        return (f.rule_id or "") == pattern
+    if kind == "cve":
+        return (f.cve or "").lower() == pattern
+    return False
+
+
+def apply_ignore(findings, rules):
+    if not rules:
+        return findings, 0
+    kept = [f for f in findings
+            if not any(_matches_ignore(f, k, p) for k, p in rules)]
+    return kept, len(findings) - len(kept)
+
+
+# --------------------------------------------------------------------------- #
+# Diff / staged scoping (post-filter findings to changed files)
+# --------------------------------------------------------------------------- #
+_MANIFESTS = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock",
+              "pnpm-lock.yaml", "pyproject.toml", "Pipfile", "Pipfile.lock", "poetry.lock",
+              "go.mod", "go.sum", "Cargo.lock", "composer.lock", "Gemfile.lock"}
+
+
+def _is_manifest(relpath) -> bool:
+    base = relpath.replace("\\", "/").rsplit("/", 1)[-1]
+    if base in _MANIFESTS:
+        return True
+    return base.startswith("requirements") and base.endswith(".txt")
+
+
+def _git_lines(args, cwd):
+    try:
+        r = subprocess.run(["git", "-C", str(cwd)] + args,
+                           capture_output=True, text=True, timeout=30)
+    except Exception:
+        return None
+    if r.returncode != 0:
+        return None
+    return [l.strip() for l in r.stdout.splitlines() if l.strip()]
+
+
+def changed_files(target, staged=False, diff_ref=None):
+    """Set of posix paths (relative to `target`) that changed, or None if git fails."""
+    if staged:
+        args = ["diff", "--cached", "--name-only"]
+    elif diff_ref:
+        args = ["diff", "--name-only", diff_ref]
+    else:
+        return None
+    target = Path(target)
+    root = _git_lines(["rev-parse", "--show-toplevel"], target)
+    names = _git_lines(args, target)
+    if not root or names is None:
+        return None
+    root = Path(root[0])
+    out = set()
+    for n in names:
+        try:
+            rel = os.path.relpath((root / n).resolve(), target.resolve()).replace("\\", "/")
+        except Exception:
+            continue
+        if not rel.startswith("../"):
+            out.add(rel)
+    return out
+
+
+def apply_diff_filter(findings, changed):
+    """Keep findings in changed files; file-less findings only if a manifest changed."""
+    manifest_changed = any(_is_manifest(c) for c in changed)
+    kept = []
+    for f in findings:
+        if f.file:
+            if _rel_posix(f.file) in changed:
+                kept.append(f)
+        elif manifest_changed:
+            kept.append(f)
+    return kept
 
 
 # --------------------------------------------------------------------------- #
@@ -329,7 +496,8 @@ def normalize_checkov(raw) -> list:
 # --------------------------------------------------------------------------- #
 # Report build + markdown render
 # --------------------------------------------------------------------------- #
-def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
+def build_report(findings, target, run, skipped, errored, duration_s,
+                 scope="full", changed_files=None, ignored=0, baselined=0) -> dict:
     findings = sorted(findings, key=lambda f: severity_sort_key(f.severity))
     counts = {s: 0 for s in SEVERITIES}
     committed_secrets = 0
@@ -342,6 +510,10 @@ def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
             **counts,
             "total": len(findings),
             "committed_secrets": committed_secrets,
+            "scope": scope,
+            "changed_files": changed_files,
+            "ignored": ignored,
+            "baselined": baselined,
             "scanners_run": run,
             "scanners_skipped": skipped,
             "scanners_errored": errored,
@@ -350,6 +522,18 @@ def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
         },
         "findings": [finding_to_dict(f) for f in findings],
     }
+
+
+def gating_exit(rep, fail_on, fail_on_error) -> int:
+    """Opt-in exit code. Policy failure (findings ≥ threshold) beats tool-error."""
+    if fail_on:
+        threshold = severity_sort_key(fail_on)
+        for f in rep["findings"]:
+            if severity_sort_key(f["severity"]) <= threshold:
+                return EXIT_FINDINGS
+    if fail_on_error and rep["summary"]["scanners_errored"]:
+        return EXIT_TOOL_ERROR
+    return EXIT_OK
 
 
 def render_markdown(rep: dict) -> str:
@@ -504,7 +688,28 @@ def main(argv=None) -> int:
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--no-install-hints", action="store_true")
+    ap.add_argument("--fail-on", default=None,
+                    choices=["critical", "high", "medium", "low", "info"],
+                    help="exit non-zero if a finding at/above this severity is shown")
+    ap.add_argument("--fail-on-error", action="store_true",
+                    help="also exit non-zero if any scanner errored/timed out")
+    ap.add_argument("--baseline", default=None,
+                    help="JSON baseline of fingerprints to hide (show only new findings)")
+    ap.add_argument("--update-baseline", nargs="?", const="vibesafe-baseline.json",
+                    default=None, metavar="FILE",
+                    help="write current fingerprints to FILE and exit (default vibesafe-baseline.json)")
+    ap.add_argument("--ignore-file", default=None,
+                    help="path to .vibesafeignore (default: <target>/.vibesafeignore)")
+    ap.add_argument("--staged", action="store_true",
+                    help="only findings in git-staged files")
+    ap.add_argument("--diff", default=None, metavar="REF",
+                    help="only findings in files changed since REF")
     a = ap.parse_args(argv)
+
+    if a.baseline and a.update_baseline:
+        ap.error("--baseline and --update-baseline are mutually exclusive")
+    if a.staged and a.diff:
+        ap.error("--staged and --diff are mutually exclusive")
 
     target = Path(a.path).resolve()
     out_dir = Path(a.out_dir) if a.out_dir else Path(tempfile.mkdtemp(prefix="vibesafe-"))
@@ -526,14 +731,39 @@ def main(argv=None) -> int:
         else:
             errored.append(info)
 
+    # ---- post-processing pipeline (order matters; see spec §4.6) ----
     annotate_committed(findings, target, tracked_abs_paths(target))
-    rep = build_report(findings, target, run, skipped, errored, time.time() - t0)
+    annotate_fingerprints(findings)
+
+    scope, changed_n = "full", None
+    if a.staged or a.diff:
+        changed = changed_files(target, staged=a.staged, diff_ref=a.diff)
+        if changed is None:
+            print("[vibesafe] diff/staged requested but git is unavailable — nothing to diff.")
+            changed = set()
+        findings = apply_diff_filter(findings, changed)
+        scope = "staged" if a.staged else f"diff:{a.diff}"
+        changed_n = len(changed)
+
+    ignore_path = a.ignore_file or (target / ".vibesafeignore")
+    findings, ignored_n = apply_ignore(findings, load_ignore_rules(ignore_path))
+
+    if a.update_baseline:
+        write_baseline(a.update_baseline, findings, target)
+        print(f"[vibesafe] baseline written: {a.update_baseline} ({len(findings)} fingerprints)")
+        return EXIT_OK
+
+    findings, baselined_n = apply_baseline(findings, load_baseline(a.baseline))
+
+    rep = build_report(findings, target, run, skipped, errored, time.time() - t0,
+                       scope=scope, changed_files=changed_n,
+                       ignored=ignored_n, baselined=baselined_n)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
     md = render_markdown(rep)
     (out_dir / "report.md").write_text(md)
     print(md)
     print(f"\n[vibesafe] report: {out_dir}/report.json")
-    return 0
+    return gating_exit(rep, a.fail_on, a.fail_on_error)
 
 
 if __name__ == "__main__":

@@ -267,5 +267,158 @@ class TestIntegration(unittest.TestCase):
             self.assertGreaterEqual(rep["summary"]["committed_secrets"], 1)
 
 
+class TestFingerprint(unittest.TestCase):
+    def test_line_independent_and_stable(self):
+        a = scan.Finding(tool="semgrep", category="sast", severity="high",
+                         title="Detected eval", file="app.py", line=42, rule_id="r1")
+        b = scan.Finding(tool="semgrep", category="sast", severity="high",
+                         title="Detected eval", file="app.py", line=99, rule_id="r1")
+        self.assertEqual(scan.compute_fingerprint(a), scan.compute_fingerprint(b))
+
+    def test_differs_by_rule_and_file(self):
+        a = scan.Finding(tool="t", category="sast", severity="high", title="x",
+                         file="app.py", rule_id="r1")
+        b = scan.Finding(tool="t", category="sast", severity="high", title="x",
+                         file="app.py", rule_id="r2")
+        c = scan.Finding(tool="t", category="sast", severity="high", title="x",
+                         file="other.py", rule_id="r1")
+        self.assertNotEqual(scan.compute_fingerprint(a), scan.compute_fingerprint(b))
+        self.assertNotEqual(scan.compute_fingerprint(a), scan.compute_fingerprint(c))
+
+    def test_annotate_sets_field_and_in_report(self):
+        fs = [scan.Finding(tool="t", category="sast", severity="high", title="x", file="a.py")]
+        scan.annotate_fingerprints(fs)
+        self.assertTrue(fs[0].fingerprint)
+        self.assertIn("fingerprint", scan.finding_to_dict(fs[0]))
+
+
+class TestBaseline(unittest.TestCase):
+    def _fs(self):
+        fs = [scan.Finding(tool="t", category="sast", severity="high", title="x", file="a.py"),
+              scan.Finding(tool="t", category="deps", severity="low", title="y", package="lodash")]
+        scan.annotate_fingerprints(fs)
+        return fs
+
+    def test_apply_baseline_filters_known(self):
+        fs = self._fs()
+        known = {fs[0].fingerprint}
+        kept, n = scan.apply_baseline(fs, known)
+        self.assertEqual(n, 1)
+        self.assertEqual([f.title for f in kept], ["y"])
+
+    def test_missing_file_is_empty_no_error(self):
+        self.assertEqual(scan.load_baseline("/no/such/file.json"), set())
+
+    def test_write_then_load_roundtrip(self):
+        fs = self._fs()
+        p = Path(tempfile.mkdtemp()) / "vibesafe-baseline.json"
+        scan.write_baseline(p, fs, target="/x")
+        loaded = scan.load_baseline(p)
+        self.assertEqual(loaded, {f.fingerprint for f in fs})
+
+
+class TestIgnore(unittest.TestCase):
+    def _write(self, text):
+        p = Path(tempfile.mkdtemp()) / ".vibesafeignore"
+        p.write_text(text)
+        return p
+
+    def test_parse_prefixes_and_bare_glob(self):
+        p = self._write("# c\n\npath:src/*.js\nrule:CKV_DOCKER_3\ncve:CVE-2021-23337\ntests/*\n")
+        rules = scan.load_ignore_rules(p)
+        self.assertIn(("path", "src/*.js"), rules)
+        self.assertIn(("rule", "CKV_DOCKER_3"), rules)
+        self.assertIn(("cve", "cve-2021-23337"), rules)
+        self.assertIn(("path", "tests/*"), rules)
+
+    def test_apply_suppresses(self):
+        fs = [
+            scan.Finding(tool="t", category="secrets", severity="critical", title="s", file="src/config.js"),
+            scan.Finding(tool="t", category="iac", severity="high", title="i", file="Dockerfile", rule_id="CKV_DOCKER_3"),
+            scan.Finding(tool="t", category="deps", severity="high", title="d", package="lodash", cve="CVE-2021-23337"),
+            scan.Finding(tool="t", category="sast", severity="high", title="keep", file="app.py"),
+        ]
+        rules = [("path", "src/*.js"), ("rule", "CKV_DOCKER_3"), ("cve", "cve-2021-23337")]
+        kept, n = scan.apply_ignore(fs, rules)
+        self.assertEqual(n, 3)
+        self.assertEqual([f.title for f in kept], ["keep"])
+
+
+class TestDiffFilter(unittest.TestCase):
+    def test_manifest_detection(self):
+        self.assertTrue(scan._is_manifest("package-lock.json"))
+        self.assertTrue(scan._is_manifest("sub/requirements-dev.txt"))
+        self.assertTrue(scan._is_manifest("go.mod"))
+        self.assertFalse(scan._is_manifest("src/app.py"))
+
+    def test_keeps_only_changed_files(self):
+        fs = [
+            scan.Finding(tool="t", category="sast", severity="high", title="a", file="app.py"),
+            scan.Finding(tool="t", category="sast", severity="high", title="b", file="./untouched.py"),
+        ]
+        kept = scan.apply_diff_filter(fs, {"app.py"})
+        self.assertEqual([f.title for f in kept], ["a"])
+
+    def test_fileless_dep_kept_only_if_manifest_changed(self):
+        dep = scan.Finding(tool="npm-audit", category="deps", severity="high", title="d", package="lodash")
+        self.assertEqual(scan.apply_diff_filter([dep], {"src/app.py"}), [])
+        self.assertEqual(len(scan.apply_diff_filter([dep], {"package-lock.json"})), 1)
+
+
+class TestGating(unittest.TestCase):
+    def _rep(self, sevs, errored=None):
+        fs = [scan.Finding(tool="t", category="sast", severity=s, title=s) for s in sevs]
+        return scan.build_report(fs, target="/x", run=["semgrep"], skipped=[],
+                                 errored=errored or [], duration_s=0.1)
+
+    def test_no_flags_is_ok(self):
+        self.assertEqual(scan.gating_exit(self._rep(["high"]), None, False), scan.EXIT_OK)
+
+    def test_fail_on_high_triggers(self):
+        self.assertEqual(scan.gating_exit(self._rep(["high"]), "high", False), scan.EXIT_FINDINGS)
+        self.assertEqual(scan.gating_exit(self._rep(["medium"]), "high", False), scan.EXIT_OK)
+
+    def test_tool_error_gating_and_precedence(self):
+        errored = [{"tool": "trivy", "reason": "timeout"}]
+        self.assertEqual(scan.gating_exit(self._rep(["low"], errored), None, True), scan.EXIT_TOOL_ERROR)
+        # policy failure takes precedence over tool-error
+        self.assertEqual(scan.gating_exit(self._rep(["high"], errored), "high", True), scan.EXIT_FINDINGS)
+
+    def test_summary_carries_scope_fields(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, scope="staged", changed_files=3, ignored=2, baselined=1)
+        s = rep["summary"]
+        self.assertEqual((s["scope"], s["changed_files"], s["ignored"], s["baselined"]), ("staged", 3, 2, 1))
+
+
+class TestMainWiring(unittest.TestCase):
+    def test_default_exit_zero_and_scope_full(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        rc = scan.main(["--out-dir", str(out), str(d)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        rep = json.loads((out / "report.json").read_text())
+        self.assertEqual(rep["summary"]["scope"], "full")
+        for k in ("ignored", "baselined", "changed_files"):
+            self.assertIn(k, rep["summary"])
+
+    def test_update_baseline_writes_and_exits_ok(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        bl = Path(tempfile.mkdtemp()) / "vibesafe-baseline.json"
+        rc = scan.main(["--out-dir", str(out), "--update-baseline", str(bl), str(d)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        self.assertTrue(bl.exists())
+        self.assertIn("fingerprints", json.loads(bl.read_text()))
+
+    def test_baseline_and_update_are_mutually_exclusive(self):
+        d = Path(tempfile.mkdtemp())
+        with self.assertRaises(SystemExit):
+            scan.main(["--baseline", "a.json", "--update-baseline", "b.json", str(d)])
+
+    def test_staged_and_diff_are_mutually_exclusive(self):
+        d = Path(tempfile.mkdtemp())
+        with self.assertRaises(SystemExit):
+            scan.main(["--staged", "--diff", "HEAD", str(d)])
+
+
 if __name__ == "__main__":
     unittest.main()

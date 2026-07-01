@@ -1,0 +1,7 @@
+- id: vibesafe
+  name: vibesafe security scan (staged)
+  description: Scan staged changes for secrets, vulnerable deps, SAST, IaC and license issues.
+  entry: python3 scripts/scan.py --staged --fail-on high
+  language: system
+  pass_filenames: false
+  always_run: true

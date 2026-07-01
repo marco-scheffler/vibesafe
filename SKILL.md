@@ -33,6 +33,9 @@ When the user asks to scan/audit a project (or before a commit/release):
    Defaults to the current directory. It detects the stack, runs every available
    scanner, and writes `report.json` + `report.md` to a temp dir (path printed at the end).
    Useful flags: `--only secrets,deps,sast,iac,license`, `--timeout <s>`, `--out-dir <dir>`.
+   For CI / pre-commit / existing codebases: `--fail-on <sev>` (severity-gated exit code),
+   `--staged` / `--diff <ref>` (scan only changed files), `--baseline` / `--update-baseline` and
+   `.vibesafeignore` (show only new / suppress accepted findings). Details: `references/automation.md`.
 
 2. **Read `report.json`** (not the raw tool output). Present a prioritized summary —
    critical/high first, each with `file:line`.
