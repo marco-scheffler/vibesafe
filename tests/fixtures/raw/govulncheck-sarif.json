@@ -1,17 +1,18 @@
 {
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
   "version": "2.1.0",
   "runs": [
     {
       "tool": {"driver": {"name": "govulncheck", "rules": [
-        {"id": "GO-2021-0113", "shortDescription": {"text": "Out-of-range read in golang.org/x/text"}}
+        {"id": "GO-2021-0113", "shortDescription": {"text": "GO-2021-0113: Out-of-bounds read in golang.org/x/text/language"}}
       ]}},
       "results": [
         {
           "ruleId": "GO-2021-0113",
           "level": "error",
-          "message": {"text": "golang.org/x/text/language: out-of-range read via ParseAcceptLanguage"},
+          "message": {"text": "Your code calls vulnerable functions in 1 package (golang.org/x/text/language)."},
           "locations": [
-            {"physicalLocation": {"artifactLocation": {"uri": "main.go"}, "region": {"startLine": 12}}}
+            {"physicalLocation": {"artifactLocation": {"uri": "go.mod"}, "region": {"startLine": 1}}}
           ]
         }
       ]

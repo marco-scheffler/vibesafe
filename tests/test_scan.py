@@ -625,8 +625,8 @@ class TestGovulncheck(unittest.TestCase):
         f = fs[0]
         self.assertEqual((f.category, f.tool, f.severity), ("deps", "govulncheck", "high"))
         self.assertEqual(f.rule_id, "GO-2021-0113")
-        self.assertEqual(f.file, "main.go")
-        self.assertEqual(f.line, 12)
+        self.assertEqual(f.file, "go.mod")
+        self.assertEqual(f.line, 1)
 
 
 class TestPlanGoRust(unittest.TestCase):
