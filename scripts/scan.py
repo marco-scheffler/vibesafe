@@ -302,6 +302,8 @@ def detect_stack(path) -> dict:
         or has("requirements.txt", "pyproject.toml"),
         "docker": has("Dockerfile", "*.dockerfile", "docker-compose.yml", "docker-compose.yaml"),
         "terraform": has("*.tf"),
+        "go": (path / "go.mod").exists() or has("go.mod", "go.sum"),
+        "rust": (path / "Cargo.toml").exists() or has("Cargo.toml", "Cargo.lock"),
         "git": (path / ".git").exists(),
     }
 

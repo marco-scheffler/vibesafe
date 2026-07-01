@@ -590,5 +590,21 @@ class TestSarifMain(unittest.TestCase):
         self.assertIn("runs", s)
 
 
+class TestDetectGoRust(unittest.TestCase):
+    def _mk(self, *names):
+        d = Path(tempfile.mkdtemp())
+        for n in names:
+            (d / n).write_text("x")
+        return d
+
+    def test_go_and_rust(self):
+        self.assertTrue(scan.detect_stack(self._mk("go.mod"))["go"])
+        self.assertTrue(scan.detect_stack(self._mk("Cargo.lock"))["rust"])
+
+    def test_empty_neither(self):
+        s = scan.detect_stack(Path(tempfile.mkdtemp()))
+        self.assertFalse(s["go"]); self.assertFalse(s["rust"])
+
+
 if __name__ == "__main__":
     unittest.main()
