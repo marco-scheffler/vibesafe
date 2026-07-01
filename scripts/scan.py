@@ -657,7 +657,8 @@ def normalize_checkov(raw) -> list:
 # Report build + markdown render
 # --------------------------------------------------------------------------- #
 def build_report(findings, target, run, skipped, errored, duration_s,
-                 scope="full", changed_files=None, ignored=0, baselined=0, deduped=0) -> dict:
+                 scope="full", changed_files=None, ignored=0, baselined=0, deduped=0,
+                 stack=None) -> dict:
     findings = sorted(findings, key=lambda f: severity_sort_key(f.severity))
     counts = {s: 0 for s in SEVERITIES}
     committed_secrets = 0
@@ -671,6 +672,7 @@ def build_report(findings, target, run, skipped, errored, duration_s,
             "total": len(findings),
             "committed_secrets": committed_secrets,
             "scope": scope,
+            "stack": stack or [],
             "changed_files": changed_files,
             "ignored": ignored,
             "baselined": baselined,
@@ -722,6 +724,9 @@ def render_markdown(rep: dict) -> str:
             if f.get("also_reported_by"):
                 title += f" (also: {', '.join(f['also_reported_by'])})"
             L.append(f"| {f['severity']} | {f['category']} | {title} | {loc} |")
+        L.append("")
+    if s.get("stack"):
+        L.append(f"**Detected:** {', '.join(s['stack'])}")
         L.append("")
     run = ", ".join(s["scanners_run"]) or "none"
     cov = f"**Coverage:** ran: {run}"
@@ -1010,9 +1015,11 @@ def main(argv=None) -> int:
 
     findings, baselined_n = apply_baseline(findings, load_baseline(a.baseline))
 
+    detected = sorted(k for k, v in stack.items() if v and k not in ("git", "npm_lock"))
     rep = build_report(findings, target, run, skipped, errored, time.time() - t0,
                        scope=scope, changed_files=changed_n,
-                       ignored=ignored_n, baselined=baselined_n, deduped=deduped_n)
+                       ignored=ignored_n, baselined=baselined_n, deduped=deduped_n,
+                       stack=detected)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
     (out_dir / "report.sarif").write_text(json.dumps(build_sarif(rep), indent=2))
     md = render_markdown(rep)

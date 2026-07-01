@@ -738,5 +738,34 @@ class TestPlanRubyPhpJava(unittest.TestCase):
         self.assertTrue(scan._is_manifest("sub/build.gradle"))
 
 
+class TestStackSummary(unittest.TestCase):
+    def test_build_report_defaults_empty(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[], duration_s=0.1)
+        self.assertEqual(rep["summary"]["stack"], [])
+
+    def test_build_report_carries_stack(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, stack=["java", "node"])
+        self.assertEqual(rep["summary"]["stack"], ["java", "node"])
+
+    def test_markdown_shows_detected(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, stack=["java", "node"])
+        self.assertIn("**Detected:** java, node", scan.render_markdown(rep))
+
+    def test_main_reports_java_stack(self):
+        os.environ["VIBESAFE_NO_EPHEMERAL"] = "1"
+        try:
+            d = Path(tempfile.mkdtemp()); (d / "pom.xml").write_text("<project/>")
+            out = Path(tempfile.mkdtemp())
+            scan.main(["--out-dir", str(out), str(d)])
+            st = json.loads((out / "report.json").read_text())["summary"]["stack"]
+            self.assertIn("java", st)
+            self.assertNotIn("npm_lock", st)
+            self.assertNotIn("git", st)
+        finally:
+            os.environ.pop("VIBESAFE_NO_EPHEMERAL", None)
+
+
 if __name__ == "__main__":
     unittest.main()
