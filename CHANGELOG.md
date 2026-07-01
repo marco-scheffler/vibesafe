@@ -3,6 +3,22 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
+## 1.8.0 — 2026-07-01
+
+### Added
+- **Ruby, PHP & Java ecosystems**: `detect_stack` recognizes Ruby (`Gemfile.lock`), PHP
+  (`composer.json`/`composer.lock`), and Java (`pom.xml`/Gradle). Runs `bundler-audit` (Ruby) and
+  `composer audit` (PHP) as dedicated dependency scanners (deduped against `osv-scanner`); Java
+  dependencies covered by the always-on `osv-scanner`. All degrade gracefully when the tool
+  isn't installed. End-to-end detection proven in CI with real tools.
+- **Detected ecosystems** listed in `report.json` (`summary.stack`) and the markdown report
+  (`Detected:` line).
+
+### Changed
+- `npm audit` now runs only when an npm lockfile (`package-lock.json`/`npm-shrinkwrap.json`) is
+  present; pure yarn/pnpm projects are covered by `osv-scanner` instead of erroring on a missing
+  npm lockfile.
+
 ## 1.7.0 — 2026-07-01
 
 ### Added
