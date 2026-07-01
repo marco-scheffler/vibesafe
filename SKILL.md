@@ -35,7 +35,8 @@ When the user asks to scan/audit a project (or before a commit/release):
    Useful flags: `--only secrets,deps,sast,iac,license`, `--timeout <s>`, `--out-dir <dir>`.
    For CI / pre-commit / existing codebases: `--fail-on <sev>` (severity-gated exit code),
    `--staged` / `--diff <ref>` (scan only changed files), `--baseline` / `--update-baseline` and
-   `.vibesafeignore` (show only new / suppress accepted findings). Details: `references/automation.md`.
+   `.vibesafeignore` (show only new / suppress accepted findings). Scanners run concurrently
+   (`--jobs N`); cross-tool duplicates are merged (`--no-dedup` to disable). Details: `references/automation.md`.
 
 2. **Read `report.json`** (not the raw tool output). Present a prioritized summary —
    critical/high first, each with `file:line`.

@@ -420,5 +420,123 @@ class TestMainWiring(unittest.TestCase):
             scan.main(["--staged", "--diff", "HEAD", str(d)])
 
 
+class TestDedup(unittest.TestCase):
+    def _dup(self, tool, sev, committed=None):
+        return scan.Finding(tool=tool, category="deps", severity=sev, title="lodash CVE",
+                            package="lodash", rule_id="CVE-2021-23337", committed=committed)
+
+    def test_merges_same_fingerprint_keeps_most_severe(self):
+        fs = [self._dup("npm-audit", "medium"), self._dup("trivy", "high"),
+              self._dup("osv-scanner", "low")]
+        scan.annotate_fingerprints(fs)
+        out, removed = scan.dedupe_findings(fs)
+        self.assertEqual(removed, 2)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0].severity, "high")
+        self.assertEqual(out[0].tool, "trivy")
+        self.assertEqual(out[0].also_reported_by, ["npm-audit", "osv-scanner"])
+
+    def test_distinct_fingerprints_untouched(self):
+        fs = [scan.Finding(tool="t", category="sast", severity="high", title="a", file="a.py"),
+              scan.Finding(tool="t", category="sast", severity="high", title="b", file="b.py")]
+        scan.annotate_fingerprints(fs)
+        out, removed = scan.dedupe_findings(fs)
+        self.assertEqual((len(out), removed), (2, 0))
+        self.assertIsNone(out[0].also_reported_by)
+
+    def test_committed_flag_ors_across_group(self):
+        fs = [self._dup("gitleaks", "critical", committed=False),
+              self._dup("trivy", "critical", committed=True)]
+        scan.annotate_fingerprints(fs)
+        out, _ = scan.dedupe_findings(fs)
+        self.assertTrue(out[0].committed)
+
+    def test_markdown_shows_also_reported_by(self):
+        f = scan.Finding(tool="trivy", category="deps", severity="high", title="lodash CVE",
+                         package="lodash", also_reported_by=["npm-audit", "osv-scanner"])
+        rep = scan.build_report([f], target="/x", run=["trivy"], skipped=[], errored=[], duration_s=0.1)
+        md = scan.render_markdown(rep)
+        self.assertIn("(also: npm-audit, osv-scanner)", md)
+
+    def test_build_report_carries_deduped(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, deduped=3)
+        self.assertEqual(rep["summary"]["deduped"], 3)
+
+
+class TestWorkerCount(unittest.TestCase):
+    def test_values(self):
+        self.assertEqual(scan.worker_count(3, 1), 1)   # sequential
+        self.assertEqual(scan.worker_count(3, 0), 3)   # all at once
+        self.assertEqual(scan.worker_count(3, 4), 3)   # capped by job count
+        self.assertEqual(scan.worker_count(5, 4), 4)   # capped by flag
+        self.assertEqual(scan.worker_count(0, 0), 1)   # no jobs → 1
+
+
+class TestParallelEquivalence(unittest.TestCase):
+    def _fps(self, jobs):
+        out = Path(tempfile.mkdtemp())
+        fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable-app"
+        rc = scan.main(["--jobs", str(jobs), "--out-dir", str(out), str(fixture)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        rep = json.loads((out / "report.json").read_text())
+        fps = sorted(f["fingerprint"] for f in rep["findings"])
+        run = sorted(rep["summary"]["scanners_run"])
+        return fps, run
+
+    def test_sequential_equals_parallel(self):
+        seq_fps, seq_run = self._fps(1)     # sequential
+        par_fps, par_run = self._fps(0)     # all at once
+        self.assertEqual(seq_fps, par_fps)
+        self.assertEqual(seq_run, par_run)
+
+
+class TestNoDedupFlag(unittest.TestCase):
+    def test_no_dedup_reports_zero_deduped(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        rc = scan.main(["--no-dedup", "--out-dir", str(out), str(d)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        rep = json.loads((out / "report.json").read_text())
+        self.assertEqual(rep["summary"]["deduped"], 0)
+
+
+class TestNormalizePaths(unittest.TestCase):
+    def test_absolute_under_target_becomes_relative(self):
+        target = Path(tempfile.mkdtemp())
+        f = scan.Finding(tool="osv-scanner", category="deps", severity="high", title="x",
+                         file=str(target / "sub" / "package-lock.json"))
+        scan.normalize_finding_paths([f], target)
+        self.assertEqual(f.file, "sub/package-lock.json")
+
+    def test_dotslash_stripped_and_none_ok(self):
+        f = scan.Finding(tool="t", category="sast", severity="high", title="x", file="./a.py")
+        g = scan.Finding(tool="t", category="deps", severity="high", title="y", package="p")
+        scan.normalize_finding_paths([f, g], "/whatever")
+        self.assertEqual(f.file, "a.py")
+        self.assertIsNone(g.file)
+
+
+class TestDedupCrossTool(unittest.TestCase):
+    def test_merges_title_independent_across_tools(self):
+        a = scan.Finding(tool="osv-scanner", category="deps", severity="high",
+                         title="lodash: prototype pollution", package="lodash",
+                         cve="CVE-2021-23337", file="package-lock.json")
+        b = scan.Finding(tool="trivy", category="deps", severity="critical",
+                         title="Command injection in lodash", package="lodash",
+                         cve="CVE-2021-23337", file="package-lock.json")
+        out, removed = scan.dedupe_findings([a, b])
+        self.assertEqual(removed, 1)
+        self.assertEqual(out[0].severity, "critical")        # trivy (more severe) = primary
+        self.assertEqual(out[0].also_reported_by, ["osv-scanner"])
+
+    def test_different_lines_not_merged(self):
+        a = scan.Finding(tool="semgrep", category="sast", severity="high", title="SQLi",
+                         file="app.py", line=10, rule_id="sql")
+        b = scan.Finding(tool="semgrep", category="sast", severity="high", title="SQLi",
+                         file="app.py", line=20, rule_id="sql")
+        out, removed = scan.dedupe_findings([a, b])
+        self.assertEqual((len(out), removed), (2, 0))
+
+
 if __name__ == "__main__":
     unittest.main()
