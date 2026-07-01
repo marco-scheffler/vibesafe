@@ -581,5 +581,14 @@ class TestSarif(unittest.TestCase):
         self.assertEqual(res["properties"]["category"], "sast")
 
 
+class TestSarifMain(unittest.TestCase):
+    def test_main_writes_sarif(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        scan.main(["--out-dir", str(out), str(d)])
+        s = json.loads((out / "report.sarif").read_text())
+        self.assertEqual(s["version"], "2.1.0")
+        self.assertIn("runs", s)
+
+
 if __name__ == "__main__":
     unittest.main()

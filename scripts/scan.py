@@ -913,10 +913,11 @@ def main(argv=None) -> int:
                        scope=scope, changed_files=changed_n,
                        ignored=ignored_n, baselined=baselined_n, deduped=deduped_n)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
+    (out_dir / "report.sarif").write_text(json.dumps(build_sarif(rep), indent=2))
     md = render_markdown(rep)
     (out_dir / "report.md").write_text(md)
     print(md)
-    print(f"\n[vibesafe] report: {out_dir}/report.json")
+    print(f"\n[vibesafe] report: {out_dir}/report.json  ·  sarif: {out_dir}/report.sarif")
     return gating_exit(rep, a.fail_on, a.fail_on_error)
 
 
