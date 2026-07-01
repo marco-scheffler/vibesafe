@@ -1,0 +1,7 @@
+{
+  "name": "vibesafe/php-fixture",
+  "description": "Intentionally vulnerable fixture for vibesafe live-detection.",
+  "require": {
+    "guzzlehttp/guzzle": "6.5.0"
+  }
+}

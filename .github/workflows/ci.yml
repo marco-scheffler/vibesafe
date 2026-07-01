@@ -55,7 +55,16 @@ jobs:
             | tar -xz -C /tmp/ca
           cp "$(find /tmp/ca -name cargo-audit -type f | head -1)" "$HOME/bin/cargo-audit"
           chmod +x "$HOME/bin/cargo-audit"
-      - name: Prove detection (secrets / sast / deps / iac + Go & Rust)
+          # bundler-audit (Ruby deps) — Ruby is preinstalled on ubuntu-latest
+          sudo gem install --no-document bundler-audit
+          bundler-audit update
+          # composer audit (PHP deps) — PHP + latest Composer (>=2.4 for `audit`)
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends php-cli
+          curl -sS https://getcomposer.org/installer | php -- --install-dir="$HOME/bin" --filename=composer
+          composer --version
+          # Java deps are covered by osv-scanner (installed above) — no extra tool
+      - name: Prove detection (secrets / sast / deps / iac + Go, Rust, Ruby, PHP, Java)
         env:
           VIBESAFE_LIVE: "1"
         run: python -m unittest tests.test_live_detection -v

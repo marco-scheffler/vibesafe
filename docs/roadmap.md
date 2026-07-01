@@ -26,8 +26,8 @@ Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
    `trivy` **+** `osv` wird jetzt per Fingerprint gemergt (`also_reported_by`).
 2. ~~**Sequentielle Ausführung**~~ — ✅ **behoben in v1.5.0**: Scanner laufen parallel via
    `ThreadPoolExecutor` (`--jobs`, Default 4).
-3. **Stack-Detection ist Node/Python/Docker/TF-zentriert** — osv/semgrep laufen zwar generisch,
-   aber Go/Rust/Ruby/PHP/Java werden nicht erkannt oder adressiert.
+3. ~~**Stack-Detection ist Node/Python/Docker/TF-zentriert**~~ — ✅ **behoben (Go/Rust v1.7.0,
+   Ruby/PHP/Java v1.8.0)**: alle gängigen Ökosysteme werden erkannt und adressiert.
 4. **Integrationstest bewies bisher keine Detection** — nur Invarianten (kein Crash, Redaction,
    Coverage). (Wird in v1.4.0 durch den live-Job geschlossen.)
 
@@ -40,9 +40,8 @@ Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
 
 ## Tier 3 — Coverage ausbauen
 
-- **Mehr Ökosysteme** — ✅ **Go + Rust in v1.7.0** (`govulncheck` via SARIF / `cargo-audit`). Offen:
-  Ruby (`Gemfile.lock`, bundler-audit), PHP (`composer.lock`, composer audit), Java/Maven
-  (osv/trivy). Code-Lücke #3 teil-behoben.
+- **Mehr Ökosysteme** — ✅ **Go + Rust in v1.7.0**, **Ruby + PHP + Java in v1.8.0** (`bundler-audit`,
+  `composer audit`, Java via `osv-scanner`). **Code-Lücke #3 vollständig behoben.**
 - **Eigene semgrep-Regeln** (`rules/`) — für die in `references/tools.md` dokumentierten Lücken
   (string-gebautes SQL, Framework-spezifische Sinks). Differenzierer ggü. reinen Public-Packs.
 - **SBOM-Generierung** (CycloneDX/SPDX via trivy/syft) — Supply-Chain-Compliance.

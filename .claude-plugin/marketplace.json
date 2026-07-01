@@ -10,7 +10,7 @@
       "name": "vibesafe",
       "source": "./",
       "description": "Security co-pilot for web apps: secure-coding guidance + real multi-scanner audits (secrets, dependencies, SAST, IaC/container, licenses) with one normalized report.",
-      "version": "1.7.0",
+      "version": "1.8.0",
       "homepage": "https://github.com/marco-scheffler/vibesafe",
       "license": "MIT",
       "keywords": ["security", "scanner"]

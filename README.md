@@ -7,12 +7,12 @@
 **Real security scans — right inside your AI coding agent.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.7.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
 ![CI](https://github.com/marco-scheffler/vibesafe/actions/workflows/ci.yml/badge.svg)
-![Tests](https://img.shields.io/badge/tests-44%20passing-success.svg)
+![Tests](https://img.shields.io/badge/tests-94%20passing-success.svg)
 
 Secrets · dependencies · SAST · IaC/containers · licenses — **one normalized report. Local engines.**
 

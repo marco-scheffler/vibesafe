@@ -618,6 +618,48 @@ class TestCargoAudit(unittest.TestCase):
         self.assertIn(">=0.2.23", f.remediation)
 
 
+class TestBundlerAudit(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_bundler_audit(raw("bundler-audit.json"))
+        self.assertEqual(len(fs), 1)          # insecure_source result ignored
+        f = fs[0]
+        self.assertEqual((f.category, f.tool), ("deps", "bundler-audit"))
+        self.assertEqual(f.package, "rack")
+        self.assertEqual(f.severity, "high")  # from criticality
+        self.assertEqual(f.cve, "CVE-2022-30122")
+        self.assertEqual(f.rule_id, "CVE-2022-30122")
+        self.assertEqual(f.file, "Gemfile.lock")
+        self.assertIn("2.0.9.1", f.remediation)
+
+
+class TestComposerAudit(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_composer_audit(raw("composer-audit.json"))
+        self.assertEqual(len(fs), 1)
+        f = fs[0]
+        self.assertEqual((f.category, f.tool), ("deps", "composer-audit"))
+        self.assertEqual(f.package, "guzzlehttp/guzzle")
+        self.assertEqual(f.severity, "high")   # composer omits severity → default high
+        self.assertEqual(f.cve, "CVE-2022-31090")
+        self.assertEqual(f.rule_id, "PKSA-1234-5678-9012")
+        self.assertEqual(f.file, "composer.lock")
+        self.assertIn("6.5.8", f.remediation)   # affectedVersions in remediation
+
+    def test_normalize_defensive(self):
+        # Empty / missing advisories → no findings, no crash.
+        self.assertEqual(scan.normalize_composer_audit({"advisories": {}}), [])
+        self.assertEqual(scan.normalize_composer_audit({}), [])
+        # Advisory missing packageName falls back to the dict key; missing
+        # affectedVersions → generic remediation; missing cve → advisoryId is the fallback.
+        fs = scan.normalize_composer_audit(
+            {"advisories": {"vendor/pkg": [{"advisoryId": "PKSA-x", "title": "t"}]}})
+        self.assertEqual(len(fs), 1)
+        self.assertEqual(fs[0].package, "vendor/pkg")
+        self.assertEqual(fs[0].cve, "PKSA-x")
+        self.assertEqual(fs[0].rule_id, "PKSA-x")
+        self.assertIn("patched version", fs[0].remediation)
+
+
 class TestGovulncheck(unittest.TestCase):
     def test_normalize(self):
         fs = scan.normalize_govulncheck(raw("govulncheck-sarif.json"))
@@ -632,7 +674,8 @@ class TestGovulncheck(unittest.TestCase):
 class TestPlanGoRust(unittest.TestCase):
     def _tools(self, **stack):
         base = {"node": False, "python": False, "docker": False, "terraform": False,
-                "git": False, "go": False, "rust": False}
+                "git": False, "go": False, "rust": False,
+                "ruby": False, "php": False, "java": False, "npm_lock": False}
         base.update(stack)
         return [j[0] for j in scan._plan(base, only=set())]
 
@@ -645,10 +688,97 @@ class TestPlanGoRust(unittest.TestCase):
         tools = self._tools(go=True, rust=True)
         # re-filter through --only deps
         base = {"node": False, "python": False, "docker": False, "terraform": False,
-                "git": False, "go": True, "rust": True}
+                "git": False, "go": True, "rust": True,
+                "ruby": False, "php": False, "java": False, "npm_lock": False}
         only = [j[0] for j in scan._plan(base, only={"deps"})]
         self.assertIn("govulncheck", only)
         self.assertIn("cargo-audit", only)
+
+
+class TestDetectRubyPhpJava(unittest.TestCase):
+    def _mk(self, *names):
+        d = Path(tempfile.mkdtemp())
+        for n in names:
+            (d / n).write_text("x")
+        return d
+
+    def test_ruby_php_java_npm_lock(self):
+        self.assertTrue(scan.detect_stack(self._mk("Gemfile.lock"))["ruby"])
+        self.assertTrue(scan.detect_stack(self._mk("composer.json"))["php"])
+        self.assertTrue(scan.detect_stack(self._mk("pom.xml"))["java"])
+        self.assertTrue(scan.detect_stack(self._mk("package-lock.json"))["npm_lock"])
+
+    def test_empty_all_false(self):
+        s = scan.detect_stack(Path(tempfile.mkdtemp()))
+        for k in ("ruby", "php", "java", "npm_lock"):
+            self.assertFalse(s[k])
+
+    def test_node_without_lock_has_no_npm_lock(self):
+        s = scan.detect_stack(self._mk("package.json"))
+        self.assertTrue(s["node"])
+        self.assertFalse(s["npm_lock"])
+
+
+class TestPlanRubyPhpJava(unittest.TestCase):
+    def _base(self, **stack):
+        base = {"node": False, "python": False, "docker": False, "terraform": False,
+                "git": False, "go": False, "rust": False,
+                "ruby": False, "php": False, "java": False, "npm_lock": False}
+        base.update(stack)
+        return base
+
+    def _tools(self, **stack):
+        return [j[0] for j in scan._plan(self._base(**stack), only=set())]
+
+    def test_ruby_php_jobs_present(self):
+        self.assertIn("bundler-audit", self._tools(ruby=True))
+        self.assertIn("composer", self._tools(php=True))
+
+    def test_java_adds_no_job(self):
+        # Java is covered by the always-on osv-scanner; no dedicated job.
+        self.assertEqual(self._tools(java=True), self._tools())
+
+    def test_npm_gated_on_lockfile(self):
+        self.assertNotIn("npm", self._tools(node=True))                 # node but no lock
+        self.assertIn("npm", self._tools(node=True, npm_lock=True))     # lock present
+
+    def test_only_deps_keeps_ruby_php(self):
+        only = [j[0] for j in scan._plan(self._base(ruby=True, php=True), only={"deps"})]
+        self.assertIn("bundler-audit", only)
+        self.assertIn("composer", only)
+
+    def test_pom_is_manifest(self):
+        self.assertTrue(scan._is_manifest("pom.xml"))
+        self.assertTrue(scan._is_manifest("sub/build.gradle"))
+
+
+class TestStackSummary(unittest.TestCase):
+    def test_build_report_defaults_empty(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[], duration_s=0.1)
+        self.assertEqual(rep["summary"]["stack"], [])
+
+    def test_build_report_carries_stack(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, stack=["java", "node"])
+        self.assertEqual(rep["summary"]["stack"], ["java", "node"])
+
+    def test_markdown_shows_detected(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, stack=["java", "node"])
+        self.assertIn("**Detected:** java, node", scan.render_markdown(rep))
+
+    def test_main_reports_java_stack(self):
+        os.environ["VIBESAFE_NO_EPHEMERAL"] = "1"
+        try:
+            d = Path(tempfile.mkdtemp()); (d / "pom.xml").write_text("<project/>")
+            out = Path(tempfile.mkdtemp())
+            scan.main(["--out-dir", str(out), str(d)])
+            st = json.loads((out / "report.json").read_text())["summary"]["stack"]
+            self.assertIn("java", st)
+            self.assertNotIn("npm_lock", st)
+            self.assertNotIn("git", st)
+        finally:
+            os.environ.pop("VIBESAFE_NO_EPHEMERAL", None)
 
 
 if __name__ == "__main__":

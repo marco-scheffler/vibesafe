@@ -1,0 +1,17 @@
+{
+  "advisories": {
+    "guzzlehttp/guzzle": [
+      {
+        "advisoryId": "PKSA-1234-5678-9012",
+        "packageName": "guzzlehttp/guzzle",
+        "affectedVersions": ">=6.0.0,<6.5.8|>=7.0.0,<7.4.5",
+        "title": "CVE-2022-31090: Cross-domain cookie leakage",
+        "cve": "CVE-2022-31090",
+        "link": "https://github.com/guzzle/guzzle/security/advisories/GHSA-25mq-v84f-6vm5",
+        "reportedAt": "2022-06-20T22:24:00+00:00",
+        "sources": [{"name": "GitHub", "remoteId": "GHSA-25mq-v84f-6vm5"}]
+      }
+    ]
+  },
+  "abandoned": {}
+}

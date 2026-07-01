@@ -227,7 +227,8 @@ def apply_ignore(findings, rules):
 # --------------------------------------------------------------------------- #
 _MANIFESTS = {"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock",
               "pnpm-lock.yaml", "pyproject.toml", "Pipfile", "Pipfile.lock", "poetry.lock",
-              "go.mod", "go.sum", "Cargo.lock", "composer.lock", "Gemfile.lock"}
+              "go.mod", "go.sum", "Cargo.lock", "composer.lock", "Gemfile.lock",
+              "pom.xml", "build.gradle", "build.gradle.kts", "gradle.lockfile"}
 
 
 def _is_manifest(relpath) -> bool:
@@ -304,6 +305,12 @@ def detect_stack(path) -> dict:
         "terraform": has("*.tf"),
         "go": (path / "go.mod").exists() or has("go.mod", "go.sum"),
         "rust": (path / "Cargo.toml").exists() or has("Cargo.toml", "Cargo.lock"),
+        "ruby": (path / "Gemfile.lock").exists() or has("Gemfile.lock", "Gemfile"),
+        "php": (path / "composer.json").exists() or has("composer.json", "composer.lock"),
+        "java": has("pom.xml", "build.gradle", "build.gradle.kts"),
+        "npm_lock": (any((path / f).exists()
+                         for f in ("package-lock.json", "npm-shrinkwrap.json"))
+                     or has("package-lock.json", "npm-shrinkwrap.json")),
         "git": (path / ".git").exists(),
     }
 
@@ -369,7 +376,8 @@ def normalize_finding_paths(findings, target):
 # Tool resolution / safe runner
 # --------------------------------------------------------------------------- #
 _PY_TOOLS = {"semgrep", "checkov"}          # runnable via uvx / pipx run
-_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit"}  # need a real install
+_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit",
+                "bundler-audit", "composer"}  # need a real install
 
 INSTALL_HINTS = {
     "gitleaks": "brew install gitleaks",
@@ -381,6 +389,8 @@ INSTALL_HINTS = {
     "pip-audit": "pip install pip-audit",
     "govulncheck": "go install golang.org/x/vuln/cmd/govulncheck@latest",
     "cargo-audit": "cargo install cargo-audit",
+    "bundler-audit": "gem install bundler-audit",
+    "composer": "install Composer — https://getcomposer.org",
 }
 
 
@@ -506,6 +516,49 @@ def normalize_cargo_audit(raw) -> list:
     return out
 
 
+_BUNDLER_SEV = {"critical": "critical", "high": "high", "medium": "medium",
+                "low": "low", "none": "info"}
+
+
+def normalize_bundler_audit(raw) -> list:
+    out = []
+    for r in raw.get("results") or []:
+        if r.get("type") != "unpatched_gem":
+            continue
+        gem = r.get("gem") or {}
+        adv = r.get("advisory") or {}
+        patched = ", ".join(str(x) for x in (adv.get("patched_versions") or [])) \
+            or "a patched version"
+        cve_num = adv.get("cve")
+        aliases = [adv.get("id"), (f"CVE-{cve_num}" if cve_num else None)]
+        out.append(Finding(
+            tool="bundler-audit", category="deps",
+            severity=_BUNDLER_SEV.get(str(adv.get("criticality") or "").lower(), "high"),
+            title=adv.get("title") or f"Vulnerable dependency: {gem.get('name')}",
+            package=gem.get("name"), cve=_first_cve(aliases, adv.get("id")),
+            rule_id=adv.get("id"), file="Gemfile.lock",
+            remediation=f"Upgrade {gem.get('name')} to {patched}."))
+    return out
+
+
+def normalize_composer_audit(raw) -> list:
+    out = []
+    for pkg_name, advisories in (raw.get("advisories") or {}).items():
+        for adv in advisories or []:
+            name = adv.get("packageName") or pkg_name
+            affected = adv.get("affectedVersions")
+            rem = (f"Upgrade {name} beyond the affected range ({affected})."
+                   if affected else f"Upgrade {name} to a patched version.")
+            out.append(Finding(
+                tool="composer-audit", category="deps", severity="high",  # composer omits severity
+                title=adv.get("title") or f"Vulnerable dependency: {name}",
+                package=name,
+                cve=_first_cve([adv.get("cve"), adv.get("advisoryId")], adv.get("advisoryId")),
+                rule_id=adv.get("advisoryId"), file="composer.lock",
+                remediation=rem))
+    return out
+
+
 def normalize_govulncheck(raw) -> list:
     out = []
     for run in raw.get("runs") or []:
@@ -604,7 +657,8 @@ def normalize_checkov(raw) -> list:
 # Report build + markdown render
 # --------------------------------------------------------------------------- #
 def build_report(findings, target, run, skipped, errored, duration_s,
-                 scope="full", changed_files=None, ignored=0, baselined=0, deduped=0) -> dict:
+                 scope="full", changed_files=None, ignored=0, baselined=0, deduped=0,
+                 stack=None) -> dict:
     findings = sorted(findings, key=lambda f: severity_sort_key(f.severity))
     counts = {s: 0 for s in SEVERITIES}
     committed_secrets = 0
@@ -618,6 +672,7 @@ def build_report(findings, target, run, skipped, errored, duration_s,
             "total": len(findings),
             "committed_secrets": committed_secrets,
             "scope": scope,
+            "stack": stack or [],
             "changed_files": changed_files,
             "ignored": ignored,
             "baselined": baselined,
@@ -669,6 +724,9 @@ def render_markdown(rep: dict) -> str:
             if f.get("also_reported_by"):
                 title += f" (also: {', '.join(f['also_reported_by'])})"
             L.append(f"| {f['severity']} | {f['category']} | {title} | {loc} |")
+        L.append("")
+    if s.get("stack"):
+        L.append(f"**Detected:** {', '.join(s['stack'])}")
         L.append("")
     run = ", ".join(s["scanners_run"]) or "none"
     cov = f"**Coverage:** ran: {run}"
@@ -753,6 +811,7 @@ CATEGORY_OF = {
     "gitleaks": "secrets", "npm": "deps", "pip-audit": "deps",
     "osv-scanner": "deps", "semgrep": "sast", "trivy": "iac", "checkov": "iac",
     "govulncheck": "deps", "cargo-audit": "deps",
+    "bundler-audit": "deps", "composer": "deps",
 }
 
 # Vendored / build / data directories that should never be scanned as source.
@@ -770,7 +829,7 @@ def _plan(stack, only):
         gl += ["--config", GITLEAKS_CONFIG]
     jobs = [("gitleaks", gl, normalize_gitleaks)]
 
-    if stack["node"]:
+    if stack["npm_lock"]:
         jobs.append(("npm", ["audit", "--json"], normalize_npm_audit))
     if stack["python"]:
         jobs.append(("pip-audit", ["-f", "json"], normalize_pip_audit))
@@ -779,6 +838,10 @@ def _plan(stack, only):
         jobs.append(("govulncheck", ["-format", "sarif", "./..."], normalize_govulncheck))
     if stack["rust"]:
         jobs.append(("cargo-audit", ["audit", "--json"], normalize_cargo_audit))
+    if stack["ruby"]:
+        jobs.append(("bundler-audit", ["check", "--format", "json"], normalize_bundler_audit))
+    if stack["php"]:
+        jobs.append(("composer", ["audit", "--format=json"], normalize_composer_audit))
 
     sg = ["--config", "p/security-audit", "--config", "p/secrets",
           "--config", "p/owasp-top-ten", "--json", "--quiet"]
@@ -816,7 +879,7 @@ def _execute_job(tool, argv, normalizer, cwd, timeout):
     not as "ran with 0 findings" — so a tool that fatally fails is never silently
     masked in the coverage line.
     """
-    name = "npm-audit" if tool == "npm" else tool
+    name = {"npm": "npm-audit", "composer": "composer-audit"}.get(tool, tool)
     runner = resolve_runner(tool)
     if runner is None:
         return [], ("skipped", {"tool": name, "reason": "not installed",
@@ -952,9 +1015,11 @@ def main(argv=None) -> int:
 
     findings, baselined_n = apply_baseline(findings, load_baseline(a.baseline))
 
+    detected = sorted(k for k, v in stack.items() if v and k not in ("git", "npm_lock"))
     rep = build_report(findings, target, run, skipped, errored, time.time() - t0,
                        scope=scope, changed_files=changed_n,
-                       ignored=ignored_n, baselined=baselined_n, deduped=deduped_n)
+                       ignored=ignored_n, baselined=baselined_n, deduped=deduped_n,
+                       stack=detected)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
     (out_dir / "report.sarif").write_text(json.dumps(build_sarif(rep), indent=2))
     md = render_markdown(rep)
