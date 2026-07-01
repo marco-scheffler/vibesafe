@@ -618,6 +618,20 @@ class TestCargoAudit(unittest.TestCase):
         self.assertIn(">=0.2.23", f.remediation)
 
 
+class TestBundlerAudit(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_bundler_audit(raw("bundler-audit.json"))
+        self.assertEqual(len(fs), 1)          # insecure_source result ignored
+        f = fs[0]
+        self.assertEqual((f.category, f.tool), ("deps", "bundler-audit"))
+        self.assertEqual(f.package, "rack")
+        self.assertEqual(f.severity, "high")  # from criticality
+        self.assertEqual(f.cve, "CVE-2022-30122")
+        self.assertEqual(f.rule_id, "CVE-2022-30122")
+        self.assertEqual(f.file, "Gemfile.lock")
+        self.assertIn("2.0.9.1", f.remediation)
+
+
 class TestGovulncheck(unittest.TestCase):
     def test_normalize(self):
         fs = scan.normalize_govulncheck(raw("govulncheck-sarif.json"))

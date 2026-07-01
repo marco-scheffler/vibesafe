@@ -1,0 +1,30 @@
+{
+  "version": "0.9.2",
+  "created_at": "2026-01-01 00:00:00 +0000",
+  "results": [
+    {
+      "type": "unpatched_gem",
+      "gem": {"name": "rack", "version": "2.0.0"},
+      "advisory": {
+        "path": "/db/gems/rack/CVE-2022-30122.yml",
+        "id": "CVE-2022-30122",
+        "url": "https://github.com/advisories/GHSA-wq4h-9vvf-58wf",
+        "title": "Denial of Service Vulnerability in Rack Multipart Parsing",
+        "date": "2022-05-31",
+        "description": "A DoS in rack multipart parsing.",
+        "cvss_v2": null,
+        "cvss_v3": 7.5,
+        "cve": "2022-30122",
+        "osvdb": null,
+        "ghsa": "wq4h-9vvf-58wf",
+        "unaffected_versions": [],
+        "patched_versions": ["~> 2.0.9.1", ">= 2.1.4.1"],
+        "criticality": "high"
+      }
+    },
+    {
+      "type": "insecure_source",
+      "source": "http://rubygems.org/"
+    }
+  ]
+}

@@ -512,6 +512,31 @@ def normalize_cargo_audit(raw) -> list:
     return out
 
 
+_BUNDLER_SEV = {"critical": "critical", "high": "high", "medium": "medium",
+                "low": "low", "none": "info"}
+
+
+def normalize_bundler_audit(raw) -> list:
+    out = []
+    for r in raw.get("results") or []:
+        if r.get("type") != "unpatched_gem":
+            continue
+        gem = r.get("gem") or {}
+        adv = r.get("advisory") or {}
+        patched = ", ".join(str(x) for x in (adv.get("patched_versions") or [])) \
+            or "a patched version"
+        cve_num = adv.get("cve")
+        aliases = [adv.get("id"), (f"CVE-{cve_num}" if cve_num else None)]
+        out.append(Finding(
+            tool="bundler-audit", category="deps",
+            severity=_BUNDLER_SEV.get(str(adv.get("criticality") or "").lower(), "high"),
+            title=adv.get("title") or f"Vulnerable dependency: {gem.get('name')}",
+            package=gem.get("name"), cve=_first_cve(aliases, adv.get("id")),
+            rule_id=adv.get("id"), file="Gemfile.lock",
+            remediation=f"Upgrade {gem.get('name')} to {patched}."))
+    return out
+
+
 def normalize_govulncheck(raw) -> list:
     out = []
     for run in raw.get("runs") or []:
