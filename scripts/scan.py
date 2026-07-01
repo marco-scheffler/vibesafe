@@ -375,9 +375,10 @@ def normalize_finding_paths(findings, target):
 # --------------------------------------------------------------------------- #
 # Tool resolution / safe runner
 # --------------------------------------------------------------------------- #
-_PY_TOOLS = {"semgrep", "checkov"}          # runnable via uvx / pipx run
-_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit",
-                "bundler-audit", "composer"}  # need a real install
+# Tools runnable via an ephemeral runner (uvx / pipx run) when not installed.
+# Every other scanner is native-only: no ephemeral fallback, so it is reported as
+# skipped (with its INSTALL_HINTS hint) when the binary is absent — see resolve_runner.
+_PY_TOOLS = {"semgrep", "checkov"}
 
 INSTALL_HINTS = {
     "gitleaks": "brew install gitleaks",
