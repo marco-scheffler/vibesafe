@@ -9,6 +9,7 @@ gracefully — they are recorded as skipped/errored and never abort the run.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -113,6 +114,55 @@ def write_baseline(path, findings, target) -> None:
     Path(path).write_text(json.dumps(
         {"generated_from": str(target), "count": len(fps), "fingerprints": fps},
         indent=2))
+
+
+# --------------------------------------------------------------------------- #
+# .vibesafeignore (pattern-based suppression of accepted findings)
+# --------------------------------------------------------------------------- #
+def load_ignore_rules(path):
+    """Parse .vibesafeignore → list of (kind, pattern), kind ∈ path|rule|cve."""
+    rules = []
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return rules
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("path:"):
+            rules.append(("path", line[5:].strip()))
+        elif line.startswith("rule:"):
+            rules.append(("rule", line[5:].strip()))
+        elif line.startswith("cve:"):
+            rules.append(("cve", line[4:].strip().lower()))
+        else:
+            rules.append(("path", line))
+    return rules
+
+
+def _rel_posix(file):
+    fp = (file or "").replace("\\", "/")
+    return fp[2:] if fp.startswith("./") else fp
+
+
+def _matches_ignore(f, kind, pattern):
+    if kind == "path":
+        fp = _rel_posix(f.file)
+        return bool(fp) and fnmatch.fnmatch(fp, pattern)
+    if kind == "rule":
+        return (f.rule_id or "") == pattern
+    if kind == "cve":
+        return (f.cve or "").lower() == pattern
+    return False
+
+
+def apply_ignore(findings, rules):
+    if not rules:
+        return findings, 0
+    kept = [f for f in findings
+            if not any(_matches_ignore(f, k, p) for k, p in rules)]
+    return kept, len(findings) - len(kept)
 
 
 # --------------------------------------------------------------------------- #

@@ -317,5 +317,32 @@ class TestBaseline(unittest.TestCase):
         self.assertEqual(loaded, {f.fingerprint for f in fs})
 
 
+class TestIgnore(unittest.TestCase):
+    def _write(self, text):
+        p = Path(tempfile.mkdtemp()) / ".vibesafeignore"
+        p.write_text(text)
+        return p
+
+    def test_parse_prefixes_and_bare_glob(self):
+        p = self._write("# c\n\npath:src/*.js\nrule:CKV_DOCKER_3\ncve:CVE-2021-23337\ntests/*\n")
+        rules = scan.load_ignore_rules(p)
+        self.assertIn(("path", "src/*.js"), rules)
+        self.assertIn(("rule", "CKV_DOCKER_3"), rules)
+        self.assertIn(("cve", "cve-2021-23337"), rules)
+        self.assertIn(("path", "tests/*"), rules)
+
+    def test_apply_suppresses(self):
+        fs = [
+            scan.Finding(tool="t", category="secrets", severity="critical", title="s", file="src/config.js"),
+            scan.Finding(tool="t", category="iac", severity="high", title="i", file="Dockerfile", rule_id="CKV_DOCKER_3"),
+            scan.Finding(tool="t", category="deps", severity="high", title="d", package="lodash", cve="CVE-2021-23337"),
+            scan.Finding(tool="t", category="sast", severity="high", title="keep", file="app.py"),
+        ]
+        rules = [("path", "src/*.js"), ("rule", "CKV_DOCKER_3"), ("cve", "cve-2021-23337")]
+        kept, n = scan.apply_ignore(fs, rules)
+        self.assertEqual(n, 3)
+        self.assertEqual([f.title for f in kept], ["keep"])
+
+
 if __name__ == "__main__":
     unittest.main()
