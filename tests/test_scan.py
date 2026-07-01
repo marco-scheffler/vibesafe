@@ -606,5 +606,17 @@ class TestDetectGoRust(unittest.TestCase):
         self.assertFalse(s["go"]); self.assertFalse(s["rust"])
 
 
+class TestCargoAudit(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_cargo_audit(raw("cargo-audit.json"))
+        self.assertEqual(len(fs), 1)
+        f = fs[0]
+        self.assertEqual((f.category, f.tool), ("deps", "cargo-audit"))
+        self.assertEqual(f.package, "time")
+        self.assertEqual(f.cve, "CVE-2020-26235")
+        self.assertEqual(f.file, "Cargo.lock")
+        self.assertIn(">=0.2.23", f.remediation)
+
+
 if __name__ == "__main__":
     unittest.main()

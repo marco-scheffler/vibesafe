@@ -489,6 +489,21 @@ def normalize_osv(raw) -> list:
     return out
 
 
+def normalize_cargo_audit(raw) -> list:
+    out = []
+    for v in ((raw.get("vulnerabilities") or {}).get("list")) or []:
+        adv = v.get("advisory") or {}
+        pkg = v.get("package") or {}
+        patched = ", ".join((v.get("versions") or {}).get("patched") or []) or "a patched version"
+        out.append(Finding(
+            tool="cargo-audit", category="deps", severity="high",
+            title=adv.get("title") or f"Vulnerable dependency: {pkg.get('name')}",
+            package=pkg.get("name"), cve=_first_cve(adv.get("aliases"), adv.get("id")),
+            file="Cargo.lock",
+            remediation=f"Upgrade {pkg.get('name')} to {patched}."))
+    return out
+
+
 def normalize_gitleaks(raw) -> list:
     items = raw if isinstance(raw, list) else raw.get("findings", [])
     out = []
