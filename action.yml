@@ -19,7 +19,7 @@ inputs:
     description: Per-tool timeout in seconds.
     default: "120"
   upload-sarif:
-    description: If "true", upload report.sarif to GitHub code scanning (needs security-events: write).
+    description: 'If "true", upload report.sarif to GitHub code scanning (needs security-events write permission).'
     default: "false"
 runs:
   using: composite
