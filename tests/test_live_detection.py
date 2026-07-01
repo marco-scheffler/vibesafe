@@ -103,5 +103,55 @@ class TestLiveGoRust(unittest.TestCase):
         self.assertTrue(any(f.get("package") == "time" for f in self.rust["findings"]))
 
 
+@unittest.skipUnless(os.environ.get("VIBESAFE_LIVE"), "set VIBESAFE_LIVE=1 to run")
+class TestLiveRubyPhpJava(unittest.TestCase):
+    """Proves bundler-audit (Ruby), composer audit (PHP) and osv-scanner (Java) run and
+    flag the planted vulns. Assertions use scanners_run + a finding, so they're robust to
+    which tool wins cross-tool dedup."""
+
+    php_have_lock = False
+
+    @classmethod
+    def _scan(cls, name, prepare=None):
+        work = Path(tempfile.mkdtemp()) / name
+        shutil.copytree(FIXTURES / name, work)
+        if prepare:
+            prepare(work)
+        out = Path(tempfile.mkdtemp())
+        scan.main(["--only", "deps", "--out-dir", str(out), str(work)])
+        return json.loads((out / "report.json").read_text())
+
+    @classmethod
+    def _gen_composer_lock(cls, work):
+        try:
+            subprocess.run(["composer", "update", "--no-install", "--no-audit", "--quiet"],
+                           cwd=work, capture_output=True, timeout=180, check=True)
+            cls.php_have_lock = (work / "composer.lock").exists()
+        except Exception:
+            pass
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ruby = cls._scan("ruby-app")
+        cls.php = cls._scan("php-app", prepare=cls._gen_composer_lock)
+        cls.java = cls._scan("java-app")
+
+    def test_ruby_bundler_audit_ran_and_flagged(self):
+        self.assertIn("bundler-audit", self.ruby["summary"]["scanners_run"])
+        self.assertTrue(any(f.get("package") == "rack" for f in self.ruby["findings"]))
+
+    def test_php_composer_audit_ran_and_flagged(self):
+        if not self.php_have_lock:
+            self.skipTest("no composer.lock could be generated (composer unavailable)")
+        self.assertIn("composer-audit", self.php["summary"]["scanners_run"])
+        self.assertTrue(any(f.get("package") == "guzzlehttp/guzzle"
+                            for f in self.php["findings"]))
+
+    def test_java_osv_ran_and_flagged(self):
+        self.assertIn("osv-scanner", self.java["summary"]["scanners_run"])
+        self.assertTrue(any("log4j" in str(f.get("package") or f.get("title") or "").lower()
+                            for f in self.java["findings"]))
+
+
 if __name__ == "__main__":
     unittest.main()
