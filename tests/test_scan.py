@@ -464,5 +464,41 @@ class TestDedup(unittest.TestCase):
         self.assertEqual(rep["summary"]["deduped"], 3)
 
 
+class TestWorkerCount(unittest.TestCase):
+    def test_values(self):
+        self.assertEqual(scan.worker_count(3, 1), 1)   # sequential
+        self.assertEqual(scan.worker_count(3, 0), 3)   # all at once
+        self.assertEqual(scan.worker_count(3, 4), 3)   # capped by job count
+        self.assertEqual(scan.worker_count(5, 4), 4)   # capped by flag
+        self.assertEqual(scan.worker_count(0, 0), 1)   # no jobs → 1
+
+
+class TestParallelEquivalence(unittest.TestCase):
+    def _fps(self, jobs):
+        out = Path(tempfile.mkdtemp())
+        fixture = Path(__file__).resolve().parent / "fixtures" / "vulnerable-app"
+        rc = scan.main(["--jobs", str(jobs), "--out-dir", str(out), str(fixture)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        rep = json.loads((out / "report.json").read_text())
+        fps = sorted(f["fingerprint"] for f in rep["findings"])
+        run = sorted(rep["summary"]["scanners_run"])
+        return fps, run
+
+    def test_sequential_equals_parallel(self):
+        seq_fps, seq_run = self._fps(1)     # sequential
+        par_fps, par_run = self._fps(0)     # all at once
+        self.assertEqual(seq_fps, par_fps)
+        self.assertEqual(seq_run, par_run)
+
+
+class TestNoDedupFlag(unittest.TestCase):
+    def test_no_dedup_reports_zero_deduped(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        rc = scan.main(["--no-dedup", "--out-dir", str(out), str(d)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        rep = json.loads((out / "report.json").read_text())
+        self.assertEqual(rep["summary"]["deduped"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

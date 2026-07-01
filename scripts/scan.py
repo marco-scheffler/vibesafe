@@ -9,6 +9,7 @@ gracefully — they are recorded as skipped/errored and never abort the run.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import fnmatch
 import hashlib
 import json
@@ -118,6 +119,17 @@ def dedupe_findings(findings):
             primary.committed = True
         out.append(primary)
     return out, len(findings) - len(out)
+
+
+def worker_count(n_jobs, flag):
+    """How many scanners to run at once. flag: 1=sequential, 0/negative=all, else capped."""
+    if n_jobs <= 0:
+        return 1
+    if flag == 1:
+        return 1
+    if flag <= 0:
+        return n_jobs
+    return min(flag, n_jobs)
 
 
 # --------------------------------------------------------------------------- #
@@ -732,6 +744,10 @@ def main(argv=None) -> int:
                     help="only findings in git-staged files")
     ap.add_argument("--diff", default=None, metavar="REF",
                     help="only findings in files changed since REF")
+    ap.add_argument("--jobs", type=int, default=4,
+                    help="scanners to run concurrently (1=sequential, 0=all at once)")
+    ap.add_argument("--no-dedup", action="store_true",
+                    help="do not merge findings reported by multiple tools")
     a = ap.parse_args(argv)
 
     if a.baseline and a.update_baseline:
@@ -746,9 +762,20 @@ def main(argv=None) -> int:
     stack = detect_stack(target)
 
     t0 = time.time()
+    jobs = _plan(stack, only)
+    workers = worker_count(len(jobs), a.jobs)
+    if workers == 1:
+        results = [_execute_job(t, av, nz, target, a.timeout) for t, av, nz in jobs]
+    else:
+        results = [None] * len(jobs)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_execute_job, t, av, nz, target, a.timeout): i
+                    for i, (t, av, nz) in enumerate(jobs)}
+            for fut in concurrent.futures.as_completed(futs):
+                results[futs[fut]] = fut.result()
+
     findings, run, skipped, errored = [], [], [], []
-    for tool, argv_, norm in _plan(stack, only):
-        fs, (state, info) = _execute_job(tool, argv_, norm, target, a.timeout)
+    for fs, (state, info) in results:
         findings += fs
         if state == "run":
             run.append(info)
@@ -762,6 +789,9 @@ def main(argv=None) -> int:
     # ---- post-processing pipeline (order matters; see spec §4.6) ----
     annotate_committed(findings, target, tracked_abs_paths(target))
     annotate_fingerprints(findings)
+    deduped_n = 0
+    if not a.no_dedup:
+        findings, deduped_n = dedupe_findings(findings)
 
     scope, changed_n = "full", None
     if a.staged or a.diff:
@@ -785,7 +815,7 @@ def main(argv=None) -> int:
 
     rep = build_report(findings, target, run, skipped, errored, time.time() - t0,
                        scope=scope, changed_files=changed_n,
-                       ignored=ignored_n, baselined=baselined_n)
+                       ignored=ignored_n, baselined=baselined_n, deduped=deduped_n)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
     md = render_markdown(rep)
     (out_dir / "report.md").write_text(md)
