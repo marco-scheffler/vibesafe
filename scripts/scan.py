@@ -688,7 +688,28 @@ def main(argv=None) -> int:
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--no-install-hints", action="store_true")
+    ap.add_argument("--fail-on", default=None,
+                    choices=["critical", "high", "medium", "low", "info"],
+                    help="exit non-zero if a finding at/above this severity is shown")
+    ap.add_argument("--fail-on-error", action="store_true",
+                    help="also exit non-zero if any scanner errored/timed out")
+    ap.add_argument("--baseline", default=None,
+                    help="JSON baseline of fingerprints to hide (show only new findings)")
+    ap.add_argument("--update-baseline", nargs="?", const="vibesafe-baseline.json",
+                    default=None, metavar="FILE",
+                    help="write current fingerprints to FILE and exit (default vibesafe-baseline.json)")
+    ap.add_argument("--ignore-file", default=None,
+                    help="path to .vibesafeignore (default: <target>/.vibesafeignore)")
+    ap.add_argument("--staged", action="store_true",
+                    help="only findings in git-staged files")
+    ap.add_argument("--diff", default=None, metavar="REF",
+                    help="only findings in files changed since REF")
     a = ap.parse_args(argv)
+
+    if a.baseline and a.update_baseline:
+        ap.error("--baseline and --update-baseline are mutually exclusive")
+    if a.staged and a.diff:
+        ap.error("--staged and --diff are mutually exclusive")
 
     target = Path(a.path).resolve()
     out_dir = Path(a.out_dir) if a.out_dir else Path(tempfile.mkdtemp(prefix="vibesafe-"))
@@ -710,14 +731,39 @@ def main(argv=None) -> int:
         else:
             errored.append(info)
 
+    # ---- post-processing pipeline (order matters; see spec §4.6) ----
     annotate_committed(findings, target, tracked_abs_paths(target))
-    rep = build_report(findings, target, run, skipped, errored, time.time() - t0)
+    annotate_fingerprints(findings)
+
+    scope, changed_n = "full", None
+    if a.staged or a.diff:
+        changed = changed_files(target, staged=a.staged, diff_ref=a.diff)
+        if changed is None:
+            print("[vibesafe] diff/staged requested but git is unavailable — nothing to diff.")
+            changed = set()
+        findings = apply_diff_filter(findings, changed)
+        scope = "staged" if a.staged else f"diff:{a.diff}"
+        changed_n = len(changed)
+
+    ignore_path = a.ignore_file or (target / ".vibesafeignore")
+    findings, ignored_n = apply_ignore(findings, load_ignore_rules(ignore_path))
+
+    if a.update_baseline:
+        write_baseline(a.update_baseline, findings, target)
+        print(f"[vibesafe] baseline written: {a.update_baseline} ({len(findings)} fingerprints)")
+        return EXIT_OK
+
+    findings, baselined_n = apply_baseline(findings, load_baseline(a.baseline))
+
+    rep = build_report(findings, target, run, skipped, errored, time.time() - t0,
+                       scope=scope, changed_files=changed_n,
+                       ignored=ignored_n, baselined=baselined_n)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
     md = render_markdown(rep)
     (out_dir / "report.md").write_text(md)
     print(md)
     print(f"\n[vibesafe] report: {out_dir}/report.json")
-    return 0
+    return gating_exit(rep, a.fail_on, a.fail_on_error)
 
 
 if __name__ == "__main__":

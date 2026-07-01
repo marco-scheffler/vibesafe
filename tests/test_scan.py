@@ -391,5 +391,34 @@ class TestGating(unittest.TestCase):
         self.assertEqual((s["scope"], s["changed_files"], s["ignored"], s["baselined"]), ("staged", 3, 2, 1))
 
 
+class TestMainWiring(unittest.TestCase):
+    def test_default_exit_zero_and_scope_full(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        rc = scan.main(["--out-dir", str(out), str(d)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        rep = json.loads((out / "report.json").read_text())
+        self.assertEqual(rep["summary"]["scope"], "full")
+        for k in ("ignored", "baselined", "changed_files"):
+            self.assertIn(k, rep["summary"])
+
+    def test_update_baseline_writes_and_exits_ok(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        bl = Path(tempfile.mkdtemp()) / "vibesafe-baseline.json"
+        rc = scan.main(["--out-dir", str(out), "--update-baseline", str(bl), str(d)])
+        self.assertEqual(rc, scan.EXIT_OK)
+        self.assertTrue(bl.exists())
+        self.assertIn("fingerprints", json.loads(bl.read_text()))
+
+    def test_baseline_and_update_are_mutually_exclusive(self):
+        d = Path(tempfile.mkdtemp())
+        with self.assertRaises(SystemExit):
+            scan.main(["--baseline", "a.json", "--update-baseline", "b.json", str(d)])
+
+    def test_staged_and_diff_are_mutually_exclusive(self):
+        d = Path(tempfile.mkdtemp())
+        with self.assertRaises(SystemExit):
+            scan.main(["--staged", "--diff", "HEAD", str(d)])
+
+
 if __name__ == "__main__":
     unittest.main()
