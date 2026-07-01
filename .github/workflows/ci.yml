@@ -47,7 +47,15 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           # semgrep (sast) — pip so it lands on the setup-python PATH
           pip install semgrep
-      - name: Prove detection against the vulnerable fixture
+          # govulncheck (Go deps, reachability) — Go is preinstalled on ubuntu-latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # cargo-audit (Rust deps) — prebuilt binary, no compile
+          mkdir -p /tmp/ca
+          curl -sSL https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.2/cargo-audit-x86_64-unknown-linux-gnu-v0.22.2.tgz \
+            | tar -xz -C /tmp/ca
+          cp "$(find /tmp/ca -name cargo-audit -type f | head -1)" "$HOME/bin/cargo-audit"
+          chmod +x "$HOME/bin/cargo-audit"
+      - name: Prove detection (secrets / sast / deps / iac + Go & Rust)
         env:
           VIBESAFE_LIVE: "1"
         run: python -m unittest tests.test_live_detection -v

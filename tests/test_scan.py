@@ -590,5 +590,66 @@ class TestSarifMain(unittest.TestCase):
         self.assertIn("runs", s)
 
 
+class TestDetectGoRust(unittest.TestCase):
+    def _mk(self, *names):
+        d = Path(tempfile.mkdtemp())
+        for n in names:
+            (d / n).write_text("x")
+        return d
+
+    def test_go_and_rust(self):
+        self.assertTrue(scan.detect_stack(self._mk("go.mod"))["go"])
+        self.assertTrue(scan.detect_stack(self._mk("Cargo.lock"))["rust"])
+
+    def test_empty_neither(self):
+        s = scan.detect_stack(Path(tempfile.mkdtemp()))
+        self.assertFalse(s["go"]); self.assertFalse(s["rust"])
+
+
+class TestCargoAudit(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_cargo_audit(raw("cargo-audit.json"))
+        self.assertEqual(len(fs), 1)
+        f = fs[0]
+        self.assertEqual((f.category, f.tool), ("deps", "cargo-audit"))
+        self.assertEqual(f.package, "time")
+        self.assertEqual(f.cve, "CVE-2020-26235")
+        self.assertEqual(f.file, "Cargo.lock")
+        self.assertIn(">=0.2.23", f.remediation)
+
+
+class TestGovulncheck(unittest.TestCase):
+    def test_normalize(self):
+        fs = scan.normalize_govulncheck(raw("govulncheck-sarif.json"))
+        self.assertEqual(len(fs), 1)
+        f = fs[0]
+        self.assertEqual((f.category, f.tool, f.severity), ("deps", "govulncheck", "high"))
+        self.assertEqual(f.rule_id, "GO-2021-0113")
+        self.assertEqual(f.file, "go.mod")
+        self.assertEqual(f.line, 1)
+
+
+class TestPlanGoRust(unittest.TestCase):
+    def _tools(self, **stack):
+        base = {"node": False, "python": False, "docker": False, "terraform": False,
+                "git": False, "go": False, "rust": False}
+        base.update(stack)
+        return [j[0] for j in scan._plan(base, only=set())]
+
+    def test_go_rust_jobs_present(self):
+        self.assertIn("govulncheck", self._tools(go=True))
+        self.assertIn("cargo-audit", self._tools(rust=True))
+        self.assertNotIn("govulncheck", self._tools())
+
+    def test_only_deps_keeps_them(self):
+        tools = self._tools(go=True, rust=True)
+        # re-filter through --only deps
+        base = {"node": False, "python": False, "docker": False, "terraform": False,
+                "git": False, "go": True, "rust": True}
+        only = [j[0] for j in scan._plan(base, only={"deps"})]
+        self.assertIn("govulncheck", only)
+        self.assertIn("cargo-audit", only)
+
+
 if __name__ == "__main__":
     unittest.main()

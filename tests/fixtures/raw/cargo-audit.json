@@ -1,0 +1,28 @@
+{
+  "database": {"advisory-count": 800},
+  "lockfile": {"dependency-count": 8},
+  "settings": {},
+  "vulnerabilities": {
+    "found": true,
+    "count": 1,
+    "list": [
+      {
+        "advisory": {
+          "id": "RUSTSEC-2020-0071",
+          "package": "time",
+          "title": "Potential segfault in the time crate",
+          "aliases": ["CVE-2020-26235", "GHSA-wcg3-cvx6-7396"],
+          "cvss": null,
+          "url": "https://rustsec.org/advisories/RUSTSEC-2020-0071"
+        },
+        "versions": {"patched": [">=0.2.23"], "unaffected": ["=0.2.0", "=0.2.1"]},
+        "package": {
+          "name": "time",
+          "version": "0.2.10",
+          "source": "registry+https://github.com/rust-lang/crates.io-index"
+        }
+      }
+    ]
+  },
+  "warnings": {}
+}

@@ -71,5 +71,37 @@ class TestLiveDetection(unittest.TestCase):
         self.assertTrue(self.rep["summary"]["scanners_run"])
 
 
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+@unittest.skipUnless(os.environ.get("VIBESAFE_LIVE"), "set VIBESAFE_LIVE=1 to run")
+class TestLiveGoRust(unittest.TestCase):
+    """Proves govulncheck (Go) and cargo-audit (Rust) run and flag the planted vulns.
+    Assertions use scanners_run + a finding, so they're robust to which tool wins
+    cross-tool dedup (cargo-audit and osv-scanner both flag the Rust crate)."""
+
+    @classmethod
+    def _scan(cls, name):
+        work = Path(tempfile.mkdtemp()) / name
+        shutil.copytree(FIXTURES / name, work)
+        out = Path(tempfile.mkdtemp())
+        scan.main(["--only", "deps", "--out-dir", str(out), str(work)])
+        return json.loads((out / "report.json").read_text())
+
+    @classmethod
+    def setUpClass(cls):
+        cls.go = cls._scan("go-app")
+        cls.rust = cls._scan("rust-app")
+
+    def test_go_govulncheck_ran_and_flagged(self):
+        self.assertIn("govulncheck", self.go["summary"]["scanners_run"])
+        self.assertTrue(any(str(f.get("rule_id", "")).startswith("GO-")
+                            for f in self.go["findings"]))
+
+    def test_rust_cargo_audit_ran_and_flagged(self):
+        self.assertIn("cargo-audit", self.rust["summary"]["scanners_run"])
+        self.assertTrue(any(f.get("package") == "time" for f in self.rust["findings"]))
+
+
 if __name__ == "__main__":
     unittest.main()

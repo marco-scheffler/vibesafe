@@ -302,6 +302,8 @@ def detect_stack(path) -> dict:
         or has("requirements.txt", "pyproject.toml"),
         "docker": has("Dockerfile", "*.dockerfile", "docker-compose.yml", "docker-compose.yaml"),
         "terraform": has("*.tf"),
+        "go": (path / "go.mod").exists() or has("go.mod", "go.sum"),
+        "rust": (path / "Cargo.toml").exists() or has("Cargo.toml", "Cargo.lock"),
         "git": (path / ".git").exists(),
     }
 
@@ -367,7 +369,7 @@ def normalize_finding_paths(findings, target):
 # Tool resolution / safe runner
 # --------------------------------------------------------------------------- #
 _PY_TOOLS = {"semgrep", "checkov"}          # runnable via uvx / pipx run
-_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner"}  # need a real install
+_NATIVE_ONLY = {"gitleaks", "trivy", "osv-scanner", "govulncheck", "cargo-audit"}  # need a real install
 
 INSTALL_HINTS = {
     "gitleaks": "brew install gitleaks",
@@ -377,6 +379,8 @@ INSTALL_HINTS = {
     "checkov": "pipx install checkov  # or: pipx run checkov",
     "npm": "install Node.js (npm ships with it)",
     "pip-audit": "pip install pip-audit",
+    "govulncheck": "go install golang.org/x/vuln/cmd/govulncheck@latest",
+    "cargo-audit": "cargo install cargo-audit",
 }
 
 
@@ -484,6 +488,39 @@ def normalize_osv(raw) -> list:
                     file=src, package=p.get("name"),
                     cve=_first_cve(vu.get("aliases"), vu.get("id")),
                     remediation=f"Upgrade {p.get('name')} to a fixed version."))
+    return out
+
+
+def normalize_cargo_audit(raw) -> list:
+    out = []
+    for v in ((raw.get("vulnerabilities") or {}).get("list")) or []:
+        adv = v.get("advisory") or {}
+        pkg = v.get("package") or {}
+        patched = ", ".join((v.get("versions") or {}).get("patched") or []) or "a patched version"
+        out.append(Finding(
+            tool="cargo-audit", category="deps", severity="high",
+            title=adv.get("title") or f"Vulnerable dependency: {pkg.get('name')}",
+            package=pkg.get("name"), cve=_first_cve(adv.get("aliases"), adv.get("id")),
+            file="Cargo.lock",
+            remediation=f"Upgrade {pkg.get('name')} to {patched}."))
+    return out
+
+
+def normalize_govulncheck(raw) -> list:
+    out = []
+    for run in raw.get("runs") or []:
+        for res in run.get("results") or []:
+            rid = res.get("ruleId")
+            locs = res.get("locations") or []
+            pl = (locs[0].get("physicalLocation") or {}) if locs else {}
+            out.append(Finding(
+                tool="govulncheck", category="deps",
+                severity=_SARIF_TO_SEV.get(res.get("level"), "high"),
+                title=((res.get("message") or {}).get("text") or rid or "Go vulnerability")[:200],
+                file=(pl.get("artifactLocation") or {}).get("uri"),
+                line=(pl.get("region") or {}).get("startLine"),
+                rule_id=rid, cve=_first_cve([rid], rid),
+                remediation="Update the module to a fixed version."))
     return out
 
 
@@ -648,6 +685,7 @@ def render_markdown(rep: dict) -> str:
 
 _SARIF_LEVEL = {"critical": "error", "high": "error", "medium": "warning",
                 "low": "note", "info": "note"}
+_SARIF_TO_SEV = {"error": "high", "warning": "medium", "note": "low"}
 
 
 def build_sarif(rep) -> dict:
@@ -714,6 +752,7 @@ def build_sarif(rep) -> dict:
 CATEGORY_OF = {
     "gitleaks": "secrets", "npm": "deps", "pip-audit": "deps",
     "osv-scanner": "deps", "semgrep": "sast", "trivy": "iac", "checkov": "iac",
+    "govulncheck": "deps", "cargo-audit": "deps",
 }
 
 # Vendored / build / data directories that should never be scanned as source.
@@ -736,6 +775,10 @@ def _plan(stack, only):
     if stack["python"]:
         jobs.append(("pip-audit", ["-f", "json"], normalize_pip_audit))
     jobs.append(("osv-scanner", ["--format", "json", "-r", "."], normalize_osv))
+    if stack["go"]:
+        jobs.append(("govulncheck", ["-format", "sarif", "./..."], normalize_govulncheck))
+    if stack["rust"]:
+        jobs.append(("cargo-audit", ["audit", "--json"], normalize_cargo_audit))
 
     sg = ["--config", "p/security-audit", "--config", "p/secrets",
           "--config", "p/owasp-top-ten", "--json", "--quiet"]

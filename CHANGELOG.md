@@ -3,6 +3,14 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
+## 1.7.0 — 2026-07-01
+
+### Added
+- **Go & Rust ecosystems**: `detect_stack` recognizes Go (`go.mod`) and Rust
+  (`Cargo.toml`/`Cargo.lock`), and runs `govulncheck` (via SARIF) and `cargo-audit` as additional
+  dependency scanners (deduped against `osv-scanner`). Both degrade gracefully when the tool isn't
+  installed.
+
 ## 1.6.0 — 2026-07-01
 
 ### Added
