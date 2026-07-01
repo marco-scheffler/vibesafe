@@ -304,6 +304,12 @@ def detect_stack(path) -> dict:
         "terraform": has("*.tf"),
         "go": (path / "go.mod").exists() or has("go.mod", "go.sum"),
         "rust": (path / "Cargo.toml").exists() or has("Cargo.toml", "Cargo.lock"),
+        "ruby": (path / "Gemfile.lock").exists() or has("Gemfile.lock", "Gemfile"),
+        "php": (path / "composer.json").exists() or has("composer.json", "composer.lock"),
+        "java": has("pom.xml", "build.gradle", "build.gradle.kts"),
+        "npm_lock": (any((path / f).exists()
+                         for f in ("package-lock.json", "npm-shrinkwrap.json"))
+                     or has("package-lock.json", "npm-shrinkwrap.json")),
         "git": (path / ".git").exists(),
     }
 

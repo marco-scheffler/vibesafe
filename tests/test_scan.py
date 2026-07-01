@@ -651,5 +651,29 @@ class TestPlanGoRust(unittest.TestCase):
         self.assertIn("cargo-audit", only)
 
 
+class TestDetectRubyPhpJava(unittest.TestCase):
+    def _mk(self, *names):
+        d = Path(tempfile.mkdtemp())
+        for n in names:
+            (d / n).write_text("x")
+        return d
+
+    def test_ruby_php_java_npm_lock(self):
+        self.assertTrue(scan.detect_stack(self._mk("Gemfile.lock"))["ruby"])
+        self.assertTrue(scan.detect_stack(self._mk("composer.json"))["php"])
+        self.assertTrue(scan.detect_stack(self._mk("pom.xml"))["java"])
+        self.assertTrue(scan.detect_stack(self._mk("package-lock.json"))["npm_lock"])
+
+    def test_empty_all_false(self):
+        s = scan.detect_stack(Path(tempfile.mkdtemp()))
+        for k in ("ruby", "php", "java", "npm_lock"):
+            self.assertFalse(s[k])
+
+    def test_node_without_lock_has_no_npm_lock(self):
+        s = scan.detect_stack(self._mk("package.json"))
+        self.assertTrue(s["node"])
+        self.assertFalse(s["npm_lock"])
+
+
 if __name__ == "__main__":
     unittest.main()
