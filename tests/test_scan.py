@@ -267,5 +267,30 @@ class TestIntegration(unittest.TestCase):
             self.assertGreaterEqual(rep["summary"]["committed_secrets"], 1)
 
 
+class TestFingerprint(unittest.TestCase):
+    def test_line_independent_and_stable(self):
+        a = scan.Finding(tool="semgrep", category="sast", severity="high",
+                         title="Detected eval", file="app.py", line=42, rule_id="r1")
+        b = scan.Finding(tool="semgrep", category="sast", severity="high",
+                         title="Detected eval", file="app.py", line=99, rule_id="r1")
+        self.assertEqual(scan.compute_fingerprint(a), scan.compute_fingerprint(b))
+
+    def test_differs_by_rule_and_file(self):
+        a = scan.Finding(tool="t", category="sast", severity="high", title="x",
+                         file="app.py", rule_id="r1")
+        b = scan.Finding(tool="t", category="sast", severity="high", title="x",
+                         file="app.py", rule_id="r2")
+        c = scan.Finding(tool="t", category="sast", severity="high", title="x",
+                         file="other.py", rule_id="r1")
+        self.assertNotEqual(scan.compute_fingerprint(a), scan.compute_fingerprint(b))
+        self.assertNotEqual(scan.compute_fingerprint(a), scan.compute_fingerprint(c))
+
+    def test_annotate_sets_field_and_in_report(self):
+        fs = [scan.Finding(tool="t", category="sast", severity="high", title="x", file="a.py")]
+        scan.annotate_fingerprints(fs)
+        self.assertTrue(fs[0].fingerprint)
+        self.assertIn("fingerprint", scan.finding_to_dict(fs[0]))
+
+
 if __name__ == "__main__":
     unittest.main()

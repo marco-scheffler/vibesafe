@@ -9,6 +9,7 @@ gracefully — they are recorded as skipped/errored and never abort the run.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -60,12 +61,31 @@ class Finding:
     rule_id: str | None = None
     remediation: str | None = None
     committed: bool | None = None   # secrets: True if the file is git-tracked (in history)
+    fingerprint: str | None = None  # stable, line-independent id (baseline/dedup basis)
 
 
 def finding_to_dict(f: "Finding") -> dict:
     d = asdict(f)
     d["severity"] = normalize_severity(d["severity"])
     return d
+
+
+def compute_fingerprint(f) -> str:
+    """Stable, line-independent id for a finding (baseline/dedup basis)."""
+    norm_title = (f.title or "").strip().lower()[:200]
+    basis = "|".join([
+        f.category or "",
+        f.rule_id or f.cve or "",
+        f.package or "",
+        f.file or "",
+        norm_title,
+    ])
+    return hashlib.sha1(basis.encode("utf-8")).hexdigest()[:16]
+
+
+def annotate_fingerprints(findings) -> None:
+    for f in findings:
+        f.fingerprint = compute_fingerprint(f)
 
 
 # --------------------------------------------------------------------------- #
