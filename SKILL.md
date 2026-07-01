@@ -36,7 +36,8 @@ When the user asks to scan/audit a project (or before a commit/release):
    For CI / pre-commit / existing codebases: `--fail-on <sev>` (severity-gated exit code),
    `--staged` / `--diff <ref>` (scan only changed files), `--baseline` / `--update-baseline` and
    `.vibesafeignore` (show only new / suppress accepted findings). Scanners run concurrently
-   (`--jobs N`); cross-tool duplicates are merged (`--no-dedup` to disable). Details: `references/automation.md`.
+   (`--jobs N`); cross-tool duplicates are merged (`--no-dedup` to disable); every run also writes
+   `report.sarif` (SARIF 2.1.0) for GitHub code scanning. Details: `references/automation.md`.
 
 2. **Read `report.json`** (not the raw tool output). Present a prioritized summary —
    critical/high first, each with `file:line`.

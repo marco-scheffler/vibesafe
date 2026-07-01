@@ -646,6 +646,68 @@ def render_markdown(rep: dict) -> str:
     return "\n".join(L)
 
 
+_SARIF_LEVEL = {"critical": "error", "high": "error", "medium": "warning",
+                "low": "note", "info": "note"}
+
+
+def build_sarif(rep) -> dict:
+    """SARIF 2.1.0 log, one run per tool. partialFingerprints are omitted — GitHub's
+    upload-sarif computes them from the source."""
+    by_tool, order = {}, []
+    for f in rep["findings"]:
+        t = f.get("tool") or "vibesafe"
+        if t not in by_tool:
+            by_tool[t] = []
+            order.append(t)
+        by_tool[t].append(f)
+    runs = []
+    for t in order:
+        rules, rule_index, results = [], {}, []
+        for f in by_tool[t]:
+            rid = f.get("rule_id") or f.get("cve") or f"{f.get('category')}/{t}"
+            title = str(f.get("title") or rid)
+            if rid not in rule_index:
+                rule_index[rid] = len(rules)
+                rules.append({
+                    "id": rid,
+                    "shortDescription": {"text": title[:120]},
+                    "fullDescription": {"text": title},
+                    "help": {"text": f.get("remediation") or "See references/remediation.md."},
+                })
+            msg = title + (f" (also: {', '.join(f['also_reported_by'])})"
+                           if f.get("also_reported_by") else "")
+            result = {
+                "ruleId": rid,
+                "ruleIndex": rule_index[rid],
+                "level": _SARIF_LEVEL.get(normalize_severity(f.get("severity")), "note"),
+                "message": {"text": msg},
+                "properties": {k: f.get(k) for k in
+                               ("category", "severity", "tool", "cve", "package",
+                                "committed", "also_reported_by") if f.get(k) is not None},
+            }
+            if f.get("file"):
+                result["locations"] = [{
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": f["file"]},
+                        "region": {"startLine": f.get("line") or 1, "startColumn": 1},
+                    }
+                }]
+            results.append(result)
+        runs.append({
+            "tool": {"driver": {
+                "name": t,
+                "informationUri": "https://github.com/marco-scheffler/vibesafe",
+                "rules": rules,
+            }},
+            "results": results,
+        })
+    return {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": runs,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
@@ -851,10 +913,11 @@ def main(argv=None) -> int:
                        scope=scope, changed_files=changed_n,
                        ignored=ignored_n, baselined=baselined_n, deduped=deduped_n)
     (out_dir / "report.json").write_text(json.dumps(rep, indent=2))
+    (out_dir / "report.sarif").write_text(json.dumps(build_sarif(rep), indent=2))
     md = render_markdown(rep)
     (out_dir / "report.md").write_text(md)
     print(md)
-    print(f"\n[vibesafe] report: {out_dir}/report.json")
+    print(f"\n[vibesafe] report: {out_dir}/report.json  ·  sarif: {out_dir}/report.sarif")
     return gating_exit(rep, a.fail_on, a.fail_on_error)
 
 

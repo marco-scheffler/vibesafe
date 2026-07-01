@@ -538,5 +538,57 @@ class TestDedupCrossTool(unittest.TestCase):
         self.assertEqual((len(out), removed), (2, 0))
 
 
+class TestSarif(unittest.TestCase):
+    def _rep(self, findings):
+        return scan.build_report(findings, target="/x", run=[], skipped=[], errored=[], duration_s=0.1)
+
+    def test_top_level_and_one_run_per_tool(self):
+        fs = [
+            scan.Finding(tool="gitleaks", category="secrets", severity="critical", title="secret", file="a.js", line=3, rule_id="aws"),
+            scan.Finding(tool="semgrep", category="sast", severity="high", title="eval", file="b.py", line=5, rule_id="eval"),
+            scan.Finding(tool="gitleaks", category="secrets", severity="critical", title="secret2", file="c.js", line=9, rule_id="gcp"),
+        ]
+        s = scan.build_sarif(self._rep(fs))
+        self.assertEqual(s["version"], "2.1.0")
+        self.assertIn("$schema", s)
+        self.assertEqual(sorted(r["tool"]["driver"]["name"] for r in s["runs"]), ["gitleaks", "semgrep"])
+
+    def test_level_mapping_and_location(self):
+        f = scan.Finding(tool="semgrep", category="sast", severity="medium", title="x", file="b.py", line=7, rule_id="r")
+        res = scan.build_sarif(self._rep([f]))["runs"][0]["results"][0]
+        self.assertEqual(res["level"], "warning")
+        loc = res["locations"][0]["physicalLocation"]
+        self.assertEqual(loc["artifactLocation"]["uri"], "b.py")
+        self.assertEqual(loc["region"]["startLine"], 7)
+
+    def test_fileless_has_no_location(self):
+        f = scan.Finding(tool="npm-audit", category="deps", severity="high", title="lodash", package="lodash")
+        self.assertNotIn("locations", scan.build_sarif(self._rep([f]))["runs"][0]["results"][0])
+
+    def test_rule_descriptor_fields(self):
+        f = scan.Finding(tool="trivy", category="iac", severity="high", title="root user", file="Dockerfile", line=1, rule_id="DS002", remediation="Add USER")
+        rule = scan.build_sarif(self._rep([f]))["runs"][0]["tool"]["driver"]["rules"][0]
+        self.assertEqual(rule["id"], "DS002")
+        for k in ("shortDescription", "fullDescription", "help"):
+            self.assertIn("text", rule[k])
+        self.assertEqual(rule["help"]["text"], "Add USER")
+
+    def test_ruleid_fallback_and_properties(self):
+        f = scan.Finding(tool="x", category="sast", severity="low", title="t")
+        res = scan.build_sarif(self._rep([f]))["runs"][0]["results"][0]
+        self.assertEqual(res["ruleId"], "sast/x")
+        self.assertEqual(res["level"], "note")
+        self.assertEqual(res["properties"]["category"], "sast")
+
+
+class TestSarifMain(unittest.TestCase):
+    def test_main_writes_sarif(self):
+        d = Path(tempfile.mkdtemp()); out = Path(tempfile.mkdtemp())
+        scan.main(["--out-dir", str(out), str(d)])
+        s = json.loads((out / "report.sarif").read_text())
+        self.assertEqual(s["version"], "2.1.0")
+        self.assertIn("runs", s)
+
+
 if __name__ == "__main__":
     unittest.main()

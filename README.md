@@ -7,7 +7,7 @@
 **Real security scans — right inside your AI coding agent.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.5.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.6.0-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
@@ -117,7 +117,7 @@ vibesafe is CI- and pre-commit-friendly. Exit codes are **opt-in** — a plain r
 degrade gracefully):
 
 ```yaml
-- uses: marco-scheffler/vibesafe@v1.4.0
+- uses: marco-scheffler/vibesafe@v1.6.0
   with:
     path: .
     fail-on: high
@@ -128,7 +128,7 @@ degrade gracefully):
 ```yaml
 repos:
   - repo: https://github.com/marco-scheffler/vibesafe
-    rev: v1.4.0
+    rev: v1.6.0
     hooks:
       - id: vibesafe
 ```
