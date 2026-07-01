@@ -26,6 +26,12 @@ from pathlib import Path
 # --------------------------------------------------------------------------- #
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 _SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
+
+# Exit codes. A default run (no --fail-on / --fail-on-error) is always EXIT_OK,
+# so existing callers are unaffected. argparse keeps 2 for usage errors.
+EXIT_OK = 0
+EXIT_FINDINGS = 1
+EXIT_TOOL_ERROR = 3
 _SEV_ALIASES = {
     "moderate": "medium",
     "error": "high",
@@ -490,7 +496,8 @@ def normalize_checkov(raw) -> list:
 # --------------------------------------------------------------------------- #
 # Report build + markdown render
 # --------------------------------------------------------------------------- #
-def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
+def build_report(findings, target, run, skipped, errored, duration_s,
+                 scope="full", changed_files=None, ignored=0, baselined=0) -> dict:
     findings = sorted(findings, key=lambda f: severity_sort_key(f.severity))
     counts = {s: 0 for s in SEVERITIES}
     committed_secrets = 0
@@ -503,6 +510,10 @@ def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
             **counts,
             "total": len(findings),
             "committed_secrets": committed_secrets,
+            "scope": scope,
+            "changed_files": changed_files,
+            "ignored": ignored,
+            "baselined": baselined,
             "scanners_run": run,
             "scanners_skipped": skipped,
             "scanners_errored": errored,
@@ -511,6 +522,18 @@ def build_report(findings, target, run, skipped, errored, duration_s) -> dict:
         },
         "findings": [finding_to_dict(f) for f in findings],
     }
+
+
+def gating_exit(rep, fail_on, fail_on_error) -> int:
+    """Opt-in exit code. Policy failure (findings ≥ threshold) beats tool-error."""
+    if fail_on:
+        threshold = severity_sort_key(fail_on)
+        for f in rep["findings"]:
+            if severity_sort_key(f["severity"]) <= threshold:
+                return EXIT_FINDINGS
+    if fail_on_error and rep["summary"]["scanners_errored"]:
+        return EXIT_TOOL_ERROR
+    return EXIT_OK
 
 
 def render_markdown(rep: dict) -> str:

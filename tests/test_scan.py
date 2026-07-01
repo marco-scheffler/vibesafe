@@ -365,5 +365,31 @@ class TestDiffFilter(unittest.TestCase):
         self.assertEqual(len(scan.apply_diff_filter([dep], {"package-lock.json"})), 1)
 
 
+class TestGating(unittest.TestCase):
+    def _rep(self, sevs, errored=None):
+        fs = [scan.Finding(tool="t", category="sast", severity=s, title=s) for s in sevs]
+        return scan.build_report(fs, target="/x", run=["semgrep"], skipped=[],
+                                 errored=errored or [], duration_s=0.1)
+
+    def test_no_flags_is_ok(self):
+        self.assertEqual(scan.gating_exit(self._rep(["high"]), None, False), scan.EXIT_OK)
+
+    def test_fail_on_high_triggers(self):
+        self.assertEqual(scan.gating_exit(self._rep(["high"]), "high", False), scan.EXIT_FINDINGS)
+        self.assertEqual(scan.gating_exit(self._rep(["medium"]), "high", False), scan.EXIT_OK)
+
+    def test_tool_error_gating_and_precedence(self):
+        errored = [{"tool": "trivy", "reason": "timeout"}]
+        self.assertEqual(scan.gating_exit(self._rep(["low"], errored), None, True), scan.EXIT_TOOL_ERROR)
+        # policy failure takes precedence over tool-error
+        self.assertEqual(scan.gating_exit(self._rep(["high"], errored), "high", True), scan.EXIT_FINDINGS)
+
+    def test_summary_carries_scope_fields(self):
+        rep = scan.build_report([], target="/x", run=[], skipped=[], errored=[],
+                                duration_s=0.1, scope="staged", changed_files=3, ignored=2, baselined=1)
+        s = rep["summary"]
+        self.assertEqual((s["scope"], s["changed_files"], s["ignored"], s["baselined"]), ("staged", 3, 2, 1))
+
+
 if __name__ == "__main__":
     unittest.main()
