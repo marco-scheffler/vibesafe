@@ -3,7 +3,7 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
-## Unreleased
+## 1.8.2 — 2026-10-12
 
 ### Changed
 - CI pins every scanner to a fixed version and every action (CI + `action.yml`) to a commit SHA,

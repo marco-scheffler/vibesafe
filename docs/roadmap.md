@@ -4,13 +4,13 @@
 > aber festgehalten, damit nichts verloren geht. Reihenfolge = grobe Hebelwirkung (Impact/Aufwand).
 > Stand: 2026-10-12.
 
-## Now — v1.8.1 (Hygiene)
+## v1.8.1 — Hygiene
 
 - [x] Action: Inputs via `env:` statt `${{ }}` im Skript (Script-Injection)
 - [x] README: alle Dependency-Scanner (Go/Rust/Ruby/PHP/Java), Beispiele auf aktuelles Release
 - [x] Lokaler Tool-State (`.tokensave/`, `.codex/`) nicht mehr getrackt
 
-## Next — CI-Wartung
+## v1.8.2 — CI-Wartung
 
 - [x] Python-Minimum auf 3.9 (3.8 ist EOL)
 - [x] Scanner-Installs gepinnt (kein `curl … main/install.sh | sh`, kein `@latest`), Actions per SHA
