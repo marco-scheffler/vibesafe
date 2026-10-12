@@ -3,6 +3,18 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
+## 1.8.1 — 2026-10-12
+
+### Security
+- **GitHub Action**: inputs (`path`, `fail-on`, `only`, `timeout`) are now passed to the scan step
+  via environment variables instead of being interpolated into the shell script, closing a
+  script-injection vector.
+
+### Changed
+- README lists all dependency scanners (Go, Rust, Ruby, PHP, Java) and pins the Action /
+  pre-commit examples to the current release.
+- Local tool state (`.tokensave/`, `.codex/`) is no longer tracked.
+
 ## 1.8.0 — 2026-07-01
 
 ### Added

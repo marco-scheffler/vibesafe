@@ -26,11 +26,17 @@ runs:
   steps:
     - name: Run vibesafe scan
       shell: bash
+      # Inputs go through env, never `${{ }}` in the script body (script injection).
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_ONLY: ${{ inputs.only }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
       run: |
         set -eo pipefail
-        args=("${{ inputs.path }}" --out-dir "$RUNNER_TEMP/vibesafe" --timeout "${{ inputs.timeout }}")
-        [ -n "${{ inputs.fail-on }}" ] && args+=(--fail-on "${{ inputs.fail-on }}")
-        [ -n "${{ inputs.only }}" ] && args+=(--only "${{ inputs.only }}")
+        args=("$INPUT_PATH" --out-dir "$RUNNER_TEMP/vibesafe" --timeout "$INPUT_TIMEOUT")
+        [ -n "$INPUT_FAIL_ON" ] && args+=(--fail-on "$INPUT_FAIL_ON")
+        [ -n "$INPUT_ONLY" ] && args+=(--only "$INPUT_ONLY")
         python3 "$GITHUB_ACTION_PATH/scripts/scan.py" "${args[@]}"
     - name: Upload report
       if: always()

@@ -1,20 +1,21 @@
 # vibesafe — Roadmap & Backlog
 
-> Lebendes Dokument. „Now" = in Arbeit / v1.4.0. Alles darunter ist bewusst zurückgestellt,
+> Lebendes Dokument. „Now" = in Arbeit. Alles darunter ist bewusst zurückgestellt,
 > aber festgehalten, damit nichts verloren geht. Reihenfolge = grobe Hebelwirkung (Impact/Aufwand).
-> Stand: 2026-07-01.
+> Stand: 2026-10-12.
 
-## Now — v1.4.0 (Automation & Adoption)
+## Now — v1.8.1 (Hygiene)
 
-Spec: `docs/specs/2026-07-01-vibesafe-automation-design.md`.
+- [x] Action: Inputs via `env:` statt `${{ }}` im Skript (Script-Injection)
+- [x] README: alle Dependency-Scanner (Go/Rust/Ruby/PHP/Java), Beispiele auf aktuelles Release
+- [x] Lokaler Tool-State (`.tokensave/`, `.codex/`) nicht mehr getrackt
 
-- [x] Design/Spec
-- [x] CI (`test` hermetisch + `live-detection` mit echtem Detection-Nachweis)
-- [x] Exit-Codes + `--fail-on` / `--fail-on-error`
-- [x] GitHub Action (`action.yml`) + pre-commit-Hook (`.pre-commit-hooks.yaml`)
-- [x] Fingerprint-Baseline (`--baseline` / `--update-baseline`) + `.vibesafeignore`
-- [x] Diff-/Staged-Scan (`--staged` / `--diff`, Post-Filter)
-- [x] Doku (`references/automation.md`, SKILL.md, README, CHANGELOG) + Version-Bump 1.4.0
+## Next — CI-Wartung
+
+- Python-3.8-Minimum anheben (EOL, auf `ubuntu-latest` nicht mehr verlässlich verfügbar)
+- Scanner-Installs pinnen (kein `curl … main/install.sh | sh`, kein `@latest`), Actions per SHA
+- `osv-scanner` v1.8.5 → v2 prüfen (CLI/JSON-Format geändert)
+- Beweglicher `v1`-Tag für Action/pre-commit, damit die Doku nicht pro Release veraltet
 
 ---
 
@@ -28,8 +29,8 @@ Referenz für spätere Arbeit — jede ist faktisch, nicht spekulativ:
    `ThreadPoolExecutor` (`--jobs`, Default 4).
 3. ~~**Stack-Detection ist Node/Python/Docker/TF-zentriert**~~ — ✅ **behoben (Go/Rust v1.7.0,
    Ruby/PHP/Java v1.8.0)**: alle gängigen Ökosysteme werden erkannt und adressiert.
-4. **Integrationstest bewies bisher keine Detection** — nur Invarianten (kein Crash, Redaction,
-   Coverage). (Wird in v1.4.0 durch den live-Job geschlossen.)
+4. ~~**Integrationstest bewies bisher keine Detection**~~ — ✅ **behoben in v1.4.0**: der
+   `live-detection`-CI-Job weist mit echten Scannern Detection pro Kategorie nach.
 
 ---
 

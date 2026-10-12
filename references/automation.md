@@ -110,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: pipx install semgrep
-      - uses: marco-scheffler/vibesafe@v1.6.0
+      - uses: marco-scheffler/vibesafe@v1.8.1
         with:
           path: .
           upload-sarif: true
@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@v4
       # install the engines you care about, e.g.:
       - run: pipx install semgrep
-      - uses: marco-scheffler/vibesafe@v1.6.0
+      - uses: marco-scheffler/vibesafe@v1.8.1
         with:
           path: .
           fail-on: high
@@ -151,7 +151,7 @@ machine (`brew install gitleaks trivy osv-scanner`; semgrep via `uvx`).
 # .pre-commit-config.yaml in a consuming repo
 repos:
   - repo: https://github.com/marco-scheffler/vibesafe
-    rev: v1.6.0
+    rev: v1.8.1
     hooks:
       - id: vibesafe
 ```
