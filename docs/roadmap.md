@@ -15,6 +15,9 @@
 - [x] Python-Minimum auf 3.9 (3.8 ist EOL)
 - [x] Scanner-Installs gepinnt (kein `curl … main/install.sh | sh`, kein `@latest`), Actions per SHA
 - [x] Beweglicher `v1`-Tag für die Action (pre-commit bleibt bewusst auf festem `rev`)
+
+## v1.8.3 — osv-scanner v2
+
 - [x] `osv-scanner` v2 geprüft: CLI/JSON kompatibel; Exit `128` (keine Package-Quellen) galt fälschlich als Fehler → behoben
 
 ---
