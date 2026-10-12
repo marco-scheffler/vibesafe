@@ -43,8 +43,9 @@ jobs:
           curl -sSL https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_Linux-64bit.tar.gz \
             | tar -xz -C "$HOME/bin" trivy
           # osv-scanner (deps)
-          go install github.com/google/osv-scanner/cmd/osv-scanner@v1.8.5
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          curl -sSL -o "$HOME/bin/osv-scanner" https://github.com/google/osv-scanner/releases/download/v2.7.0/osv-scanner_linux_amd64
+          chmod +x "$HOME/bin/osv-scanner"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"   # for go-installed govulncheck
           # semgrep (sast) — pip so it lands on the setup-python PATH
           pip install semgrep==1.180.0
           # govulncheck (Go deps, reachability) — Go is preinstalled on ubuntu-latest
