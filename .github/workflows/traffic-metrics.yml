@@ -1,0 +1,56 @@
+name: traffic-metrics
+
+# Daily snapshot of GitHub traffic (clones + views) into a PRIVATE gist, so the
+# API's 14-day retention window doesn't erase history. Both the gist ID and the
+# PAT live only in repo secrets (the gist ID is NOT in this file, because a
+# "secret" gist is only unlisted, not access-controlled). The job never prints
+# the counts — Actions logs on a public repo are world-readable.
+#
+# Inert (clean no-op) until the two secrets exist:
+#   - METRICS_TOKEN    classic PAT with scopes: repo, gist  (repo = read traffic;
+#                      the built-in GITHUB_TOKEN cannot read traffic)
+#   - TRAFFIC_GIST_ID  id of a private gist containing a file named traffic.csv
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # daily, 03:17 UTC
+  workflow_dispatch: {}
+
+permissions: {}            # no GITHUB_TOKEN privileges needed; the PAT does the work
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Append traffic snapshot to private gist
+        env:
+          GH_PAT: ${{ secrets.METRICS_TOKEN }}
+          GIST_ID: ${{ secrets.TRAFFIC_GIST_ID }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_PAT:-}" ] || [ -z "${GIST_ID:-}" ]; then
+            echo "METRICS_TOKEN / TRAFFIC_GIST_ID not configured yet — skipping (no-op)."
+            exit 0
+          fi
+          api() { curl -sf -H "Authorization: token $GH_PAT" \
+                            -H "Accept: application/vnd.github+json" "$@"; }
+
+          clones=$(api "https://api.github.com/repos/$REPO/traffic/clones")
+          views=$(api "https://api.github.com/repos/$REPO/traffic/views")
+          today=$(date -u +%F)
+          row="$today,$(jq -r '.count' <<<"$clones"),$(jq -r '.uniques' <<<"$clones"),$(jq -r '.count' <<<"$views"),$(jq -r '.uniques' <<<"$views")"
+
+          # Read the existing CSV, drop any row already recorded for today (so
+          # re-runs are idempotent), then append the fresh row.
+          cur=$(api "https://api.github.com/gists/$GIST_ID" \
+                | jq -r '.files["traffic.csv"].content // "date,clones,unique_clones,views,unique_views"')
+          cur=$(grep -v "^$today," <<<"$cur" || true)
+          new="$cur"$'\n'"$row"
+
+          jq -n --arg c "$new" '{files:{"traffic.csv":{content:$c}}}' \
+            | curl -sf -X PATCH -H "Authorization: token $GH_PAT" \
+                   -H "Accept: application/vnd.github+json" -d @- \
+                   "https://api.github.com/gists/$GIST_ID" >/dev/null
+
+          echo "Snapshot appended for $today."   # deliberately no counts in the log
