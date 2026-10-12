@@ -7,12 +7,12 @@
 **Real security scans — right inside your AI coding agent.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.8.1-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
 ![CI](https://github.com/marco-scheffler/vibesafe/actions/workflows/ci.yml/badge.svg)
-![Tests](https://img.shields.io/badge/tests-94%20passing-success.svg)
+![Tests](https://img.shields.io/badge/tests-95%20passing-success.svg)
 
 Secrets · dependencies · SAST · IaC/containers · licenses — **one normalized report. Local engines.**
 
@@ -34,7 +34,8 @@ into a single severity-ranked report.
 
 - 🔑 **Secrets, for real** — gitleaks + trivy, with **redacted** values and a `committed` flag that
   calls out secrets already in git history
-- 📦 **Vulnerable dependencies** — `npm audit` · `pip-audit` · `osv-scanner` across ecosystems
+- 📦 **Vulnerable dependencies** — Node · Python · Go · Rust · Ruby · PHP · Java, via `npm audit` ·
+  `pip-audit` · `govulncheck` · `cargo-audit` · `bundler-audit` · `composer audit` · `osv-scanner`
 - 🐛 **Code (SAST)** — semgrep security rulesets (injection, XSS, `eval`, weak crypto, …)
 - 🐳 **IaC & containers** — trivy for Docker/Terraform misconfig + license risks
 - 🧩 **One report** — every scanner normalized into a single ranked `report.json` / `report.md`
@@ -93,6 +94,11 @@ pip install pip-audit                      # usually already present
 |---|---|---|
 | Secrets | gitleaks | `brew install gitleaks` |
 | Dependencies | npm audit / pip-audit / osv-scanner | built-in / `pip install pip-audit` / `brew install osv-scanner` |
+| Dependencies (Go) | govulncheck | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
+| Dependencies (Rust) | cargo-audit | `cargo install cargo-audit` |
+| Dependencies (Ruby) | bundler-audit | `gem install bundler-audit` |
+| Dependencies (PHP) | composer audit | built into Composer ≥ 2.4 |
+| Dependencies (Java) | osv-scanner | covered by osv-scanner (`pom.xml` / Gradle lockfile) |
 | Code (SAST) | semgrep | `uvx semgrep` (auto) / `brew install semgrep` |
 | IaC / Container / License | trivy (fallback: checkov) | `brew install trivy` |
 
@@ -117,7 +123,7 @@ vibesafe is CI- and pre-commit-friendly. Exit codes are **opt-in** — a plain r
 degrade gracefully):
 
 ```yaml
-- uses: marco-scheffler/vibesafe@v1.6.0
+- uses: marco-scheffler/vibesafe@v1.8.1
   with:
     path: .
     fail-on: high
@@ -128,7 +134,7 @@ degrade gracefully):
 ```yaml
 repos:
   - repo: https://github.com/marco-scheffler/vibesafe
-    rev: v1.6.0
+    rev: v1.8.1
     hooks:
       - id: vibesafe
 ```
