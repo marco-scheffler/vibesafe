@@ -8,7 +8,7 @@
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 ![Version](https://img.shields.io/badge/version-1.8.1-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
 ![CI](https://github.com/marco-scheffler/vibesafe/actions/workflows/ci.yml/badge.svg)
@@ -45,7 +45,7 @@ into a single severity-ranked report.
 
 ## Requirements
 
-- **Python 3.8+** — the orchestrator (`scripts/scan.py`) is **stdlib-only**, no `pip install` needed.
+- **Python 3.9+** — the orchestrator (`scripts/scan.py`) is **stdlib-only**, no `pip install` needed.
 - **Optional scanners** for full coverage (see [Scanners](#scanners)). Without them vibesafe still
   runs whatever is available and shows the coverage gaps in the report.
 
@@ -123,7 +123,7 @@ vibesafe is CI- and pre-commit-friendly. Exit codes are **opt-in** — a plain r
 degrade gracefully):
 
 ```yaml
-- uses: marco-scheffler/vibesafe@v1.8.1
+- uses: marco-scheffler/vibesafe@v1
   with:
     path: .
     fail-on: high

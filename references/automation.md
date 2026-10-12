@@ -110,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: pipx install semgrep
-      - uses: marco-scheffler/vibesafe@v1.8.1
+      - uses: marco-scheffler/vibesafe@v1
         with:
           path: .
           upload-sarif: true
@@ -135,11 +135,14 @@ jobs:
       - uses: actions/checkout@v4
       # install the engines you care about, e.g.:
       - run: pipx install semgrep
-      - uses: marco-scheffler/vibesafe@v1.8.1
+      - uses: marco-scheffler/vibesafe@v1
         with:
           path: .
           fail-on: high
 ```
+
+`@v1` is a moving tag that always points at the latest 1.x release. Pin a full tag (`@v1.8.1`) or
+a commit SHA if you need a fixed version.
 
 ## pre-commit
 
@@ -155,6 +158,8 @@ repos:
     hooks:
       - id: vibesafe
 ```
+
+pre-commit expects an immutable `rev`; `pre-commit autoupdate` moves it to the latest release.
 
 ## Hermetic test mode
 

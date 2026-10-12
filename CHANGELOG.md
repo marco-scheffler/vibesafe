@@ -3,6 +3,14 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
+## Unreleased
+
+### Changed
+- CI pins every scanner to a fixed version and every action (CI + `action.yml`) to a commit SHA,
+  instead of installing from `main`/`@latest`.
+- Minimum Python is now 3.9 (3.8 is end-of-life); CI tests 3.9/3.11/3.12.
+- Action examples use the moving `@v1` tag so they stay current across releases.
+
 ## 1.8.1 — 2026-10-12
 
 ### Security
