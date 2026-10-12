@@ -141,7 +141,7 @@ jobs:
           fail-on: high
 ```
 
-`@v1` is a moving tag that always points at the latest 1.x release. Pin a full tag (`@v1.8.2`) or
+`@v1` is a moving tag that always points at the latest 1.x release. Pin a full tag (`@v1.8.3`) or
 a commit SHA if you need a fixed version.
 
 ## pre-commit
@@ -154,7 +154,7 @@ machine (`brew install gitleaks trivy osv-scanner`; semgrep via `uvx`).
 # .pre-commit-config.yaml in a consuming repo
 repos:
   - repo: https://github.com/marco-scheffler/vibesafe
-    rev: v1.8.2
+    rev: v1.8.3
     hooks:
       - id: vibesafe
 ```

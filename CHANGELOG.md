@@ -3,7 +3,7 @@
 All notable changes to vibesafe are documented here. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions use semantic versioning.
 
-## Unreleased
+## 1.8.3 — 2026-10-12
 
 ### Fixed
 - `osv-scanner` is no longer reported as **errored** on projects without package sources
