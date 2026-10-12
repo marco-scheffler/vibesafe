@@ -815,6 +815,10 @@ CATEGORY_OF = {
     "bundler-audit": "deps", "composer": "deps",
 }
 
+# Exit codes that mean "nothing to scan here", not a failure. osv-scanner exits 128
+# when it finds no package sources (v1 and v2; `--allow-no-lockfiles` is v2-only).
+NOTHING_TO_SCAN_RC = {"osv-scanner": {128}}
+
 # Vendored / build / data directories that should never be scanned as source.
 # semgrep and trivy honor these via flags; gitleaks via scripts/gitleaks.toml.
 EXCLUDE_DIRS = ["node_modules", ".git", "dist", "build", ".next", ".nuxt",
@@ -912,7 +916,7 @@ def _execute_job(tool, argv, normalizer, cwd, timeout):
     if not raw:
         # No output: distinguish a clean run (exit 0) from a failed tool (exit != 0)
         # so a fatal failure is surfaced, never masked as "ran with 0 findings".
-        if rc not in (0, None):
+        if rc not in (0, None) and rc not in NOTHING_TO_SCAN_RC.get(tool, ()):
             tail = ((err or "").strip().splitlines() or [""])[-1]
             return [], ("errored", {"tool": name, "reason": f"exit {rc}: {tail[:120]}"})
         return [], ("run", name)

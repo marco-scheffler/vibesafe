@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
@@ -779,6 +780,24 @@ class TestStackSummary(unittest.TestCase):
             self.assertNotIn("git", st)
         finally:
             os.environ.pop("VIBESAFE_NO_EPHEMERAL", None)
+
+
+class TestExecuteJobExitCodes(unittest.TestCase):
+    """An empty, non-zero run is an error — except a tool's documented 'nothing to scan' code."""
+
+    def _run(self, tool, rc):
+        with mock.patch.object(scan, "resolve_runner", return_value=[tool]), \
+             mock.patch.object(scan, "run_tool", return_value=(rc, "", "msg", "ok")):
+            return scan._execute_job(tool, [], lambda d: [], cwd=".", timeout=1)[1]
+
+    def test_osv_no_package_sources_is_clean_run(self):
+        self.assertEqual(self._run("osv-scanner", 128), ("run", "osv-scanner"))
+
+    def test_osv_other_failure_still_errored(self):
+        self.assertEqual(self._run("osv-scanner", 127)[0], "errored")
+
+    def test_code_is_tool_specific(self):
+        self.assertEqual(self._run("gitleaks", 128)[0], "errored")
 
 
 if __name__ == "__main__":
