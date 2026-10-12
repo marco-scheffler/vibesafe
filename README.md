@@ -7,7 +7,7 @@
 **Real security scans — right inside your AI coding agent.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-1.8.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.8.2-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%C2%B7%20Linux-lightgrey.svg)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-8A2BE2.svg)
@@ -134,7 +134,7 @@ degrade gracefully):
 ```yaml
 repos:
   - repo: https://github.com/marco-scheffler/vibesafe
-    rev: v1.8.1
+    rev: v1.8.2
     hooks:
       - id: vibesafe
 ```
