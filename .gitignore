@@ -5,3 +5,7 @@ report.json
 report.md
 vibesafe-report*/
 .venv/
+
+# local agent/tool state
+.tokensave/
+.codex/
