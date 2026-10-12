@@ -12,10 +12,10 @@
 
 ## Next — CI-Wartung
 
-- Python-3.8-Minimum anheben (EOL, auf `ubuntu-latest` nicht mehr verlässlich verfügbar)
-- Scanner-Installs pinnen (kein `curl … main/install.sh | sh`, kein `@latest`), Actions per SHA
-- `osv-scanner` v1.8.5 → v2 prüfen (CLI/JSON-Format geändert)
-- Beweglicher `v1`-Tag für Action/pre-commit, damit die Doku nicht pro Release veraltet
+- [x] Python-Minimum auf 3.9 (3.8 ist EOL)
+- [x] Scanner-Installs gepinnt (kein `curl … main/install.sh | sh`, kein `@latest`), Actions per SHA
+- [x] Beweglicher `v1`-Tag für die Action (pre-commit bleibt bewusst auf festem `rev`)
+- [ ] `osv-scanner` v1.8.5 → v2 prüfen (CLI/JSON-Format geändert) — eigener PR
 
 ---
 
